@@ -1,0 +1,11 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# xcodegen-generated project — project.yml is the source of truth
+Relay.xcodeproj/
+
+# macOS
+.DS_Store
