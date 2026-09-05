@@ -28,6 +28,8 @@ targets:
         NSMicrophoneUsageDescription: "Relay needs microphone access to record podcast episodes."
         NSSpeechRecognitionUsageDescription: "Relay uses on-device speech recognition to transcribe your recordings before sending them to Craft."
         ITSAppUsesNonExemptEncryption: false
+        UIBackgroundModes:
+          - audio
     entitlements:
       path: App/Relay.entitlements
       properties:

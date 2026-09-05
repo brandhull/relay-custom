@@ -6,7 +6,7 @@ This is the full-featured version, actively used day to day. For a stripped vari
 
 ## What it does
 
-- **Record** — tap to start/stop, prefers a connected external mic (USB-C or Bluetooth) over the built-in one automatically.
+- **Record** — tap to start/stop, prefers a connected external mic (USB-C or Bluetooth) over the built-in one automatically. Keeps recording in the background if the screen locks or you switch apps, and pauses cleanly (rather than silently dropping audio) if a call or another interruption comes in.
 - **Edit** — trim in place or as a copy, back up to iCloud, push episode metadata + audio to Baserow, or transcribe/summarize to a Craft document.
 - **Publish** — fill in episode details, then upload to Transistor.fm as a draft, scheduled, or published episode in one action.
 - **Sync** — settings and API credentials follow you across devices via iCloud (Keychain for secrets, `NSUbiquitousKeyValueStore` for everything else).

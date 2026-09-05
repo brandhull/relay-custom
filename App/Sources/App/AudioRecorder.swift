@@ -22,6 +22,10 @@ final class AudioRecorder: NSObject, ObservableObject {
             self, selector: #selector(routeChanged),
             name: AVAudioSession.routeChangeNotification, object: nil
         )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleInterruption),
+            name: AVAudioSession.interruptionNotification, object: nil
+        )
     }
 
     func requestPermission() async -> Bool {
@@ -88,6 +92,26 @@ final class AudioRecorder: NSObject, ObservableObject {
         }
     }
 
+    /// A call, Siri, an alarm, or another app taking over audio all raise
+    /// this — without handling it, an in-progress recording just silently
+    /// stops writing while the UI keeps showing "Recording…". On `.began`
+    /// we mirror it into a normal pause so the UI reflects reality and the
+    /// user can resume deliberately once the interruption clears; we don't
+    /// auto-resume on `.ended` even when the system flags it as safe to,
+    /// since resuming a recording without the user noticing is worse than
+    /// requiring one extra tap.
+    @objc private func handleInterruption(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+        guard type == .began else { return }
+
+        Task { @MainActor [weak self] in
+            guard let self, self.isRecording, !self.isPaused else { return }
+            self.pause()
+        }
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
@@ -138,6 +162,10 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 
     func resume() {
+        // An interruption (or backgrounding) can deactivate the session out
+        // from under us; re-activate explicitly rather than assuming
+        // `record()` alone will do it.
+        try? AVAudioSession.sharedInstance().setActive(true)
         recorder?.record()
         isPaused = false
         startDate = Date()
