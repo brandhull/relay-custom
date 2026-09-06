@@ -24,4 +24,18 @@ enum SummarizationService {
         let response = try await session.respond(to: "Summarize this transcript:\n\n\(transcript)")
         return response.content
     }
+
+    /// Fixes sentence breaks and punctuation on a full transcript without
+    /// altering wording — automatic pause-based punctuation (see
+    /// `AppleSpeechAnalyzerService`) occasionally reads a mid-thought pause
+    /// as a sentence end. Opt-in (see `AppSettings.cleanupPunctuationEnabled`)
+    /// since an LLM asked to "only fix punctuation" can still occasionally
+    /// reword something despite instructions not to.
+    static func cleanupPunctuation(_ transcript: String) async throws -> String {
+        let session = LanguageModelSession(
+            instructions: "You fix punctuation and sentence boundaries in speech-to-text transcripts. Correct only punctuation, capitalization, and sentence breaks. Do not add, remove, reorder, or reword anything — every word must stay exactly as given, in the same order. Return only the corrected transcript, nothing else."
+        )
+        let response = try await session.respond(to: transcript)
+        return response.content
+    }
 }

@@ -150,10 +150,11 @@ struct SettingsView: View {
                         value: $settings.summarizeThresholdMinutes,
                         in: 1...60
                     )
+                    Toggle("Clean up punctuation", isOn: $settings.cleanupPunctuationEnabled)
                 } header: {
                     Text("Craft")
                 } footer: {
-                    Text("Create an \"All Documents\" API connection in Craft (Connections tab) and paste its URL here. Relay creates a new document in the folder you pick — e.g. your Voicenotes folder — each time you transcribe or summarize a recording. Recordings shorter than the threshold above get the full transcript; longer ones get a summary instead (on supported devices — otherwise the full transcript is used regardless).")
+                    Text("Create an \"All Documents\" API connection in Craft (Connections tab) and paste its URL here. Relay creates a new document in the folder you pick — e.g. your Voicenotes folder — each time you transcribe or summarize a recording. Recordings shorter than the threshold above get the full transcript; longer ones get a summary instead (on supported devices — otherwise the full transcript is used regardless). Clean up punctuation runs full transcripts through an extra on-device pass that fixes sentence breaks without changing wording — off by default since it adds a small chance of the model tweaking a word despite instructions not to.")
                 }
 
                 Section("Microphone") {

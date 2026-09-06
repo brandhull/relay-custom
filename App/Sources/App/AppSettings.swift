@@ -63,6 +63,14 @@ final class AppSettings: ObservableObject {
     @Published var summarizeThresholdMinutes: Int {
         didSet { kv.set(Int64(summarizeThresholdMinutes), forKey: "summarizeThresholdMinutes") }
     }
+    /// Runs a full (non-summarized) transcript through a light on-device LLM
+    /// pass that fixes punctuation/sentence breaks without changing wording.
+    /// Off by default — an LLM asked to "only fix punctuation" can still
+    /// occasionally reword something, so this trades a small wording-fidelity
+    /// risk for cleaner punctuation, and shouldn't turn on silently.
+    @Published var cleanupPunctuationEnabled: Bool {
+        didSet { kv.set(cleanupPunctuationEnabled, forKey: "cleanupPunctuationEnabled") }
+    }
 
     init() {
         transistorAPIKey = KeychainHelper.get(key: "transistorAPIKey") ?? ""
@@ -77,6 +85,7 @@ final class AppSettings: ObservableObject {
         craftFolderTitle = kv.string(forKey: "craftFolderTitle") ?? ""
         let threshold = kv.longLong(forKey: "summarizeThresholdMinutes")
         summarizeThresholdMinutes = threshold > 0 ? Int(threshold) : 5
+        cleanupPunctuationEnabled = kv.bool(forKey: "cleanupPunctuationEnabled")
         if let data = kv.data(forKey: "cachedShows"),
            let shows = try? JSONDecoder().decode([TransistorShow].self, from: data) {
             cachedShows = shows
@@ -121,6 +130,7 @@ final class AppSettings: ObservableObject {
         craftFolderTitle = kv.string(forKey: "craftFolderTitle") ?? craftFolderTitle
         let threshold = kv.longLong(forKey: "summarizeThresholdMinutes")
         if threshold > 0 { summarizeThresholdMinutes = Int(threshold) }
+        cleanupPunctuationEnabled = kv.bool(forKey: "cleanupPunctuationEnabled")
         if let data = kv.data(forKey: "cachedShows"),
            let shows = try? JSONDecoder().decode([TransistorShow].self, from: data) {
             cachedShows = shows

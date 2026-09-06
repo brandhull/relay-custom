@@ -44,6 +44,11 @@ enum CraftPublisher {
                 content = try await SummarizationService.summarize(transcript)
                 label = "Summary"
             }
+        } else if settings.cleanupPunctuationEnabled {
+            if #available(iOS 26.0, *), SummarizationService.isAvailable() {
+                onProgress?("Cleaning up punctuation…")
+                content = try await SummarizationService.cleanupPunctuation(transcript)
+            }
         }
 
         onProgress?("Sending to Craft…")
