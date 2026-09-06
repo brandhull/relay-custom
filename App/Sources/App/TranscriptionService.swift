@@ -91,18 +91,41 @@ enum TranscriptionService {
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
 
+        // File-based on-device recognition delivers `isFinal` once per
+        // detected phrase/pause within the file, not once for the whole
+        // request — treating the first `isFinal` as "done" silently drops
+        // every segment after it. Instead, collect every final segment and
+        // only resolve once no further segment has arrived for a beat.
         return try await withCheckedThrowingContinuation { continuation in
             var didResume = false
+            var segments: [String] = []
+            var generation = 0
+
+            func finish() {
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: segments.joined(separator: " "))
+            }
+
             recognizer.recognitionTask(with: request) { result, error in
                 guard !didResume else { return }
                 if let error {
-                    didResume = true
-                    continuation.resume(throwing: error)
+                    if segments.isEmpty {
+                        didResume = true
+                        continuation.resume(throwing: error)
+                    } else {
+                        finish()
+                    }
                     return
                 }
                 guard let result, result.isFinal else { return }
-                didResume = true
-                continuation.resume(returning: result.bestTranscription.formattedString)
+                segments.append(result.bestTranscription.formattedString)
+                generation += 1
+                let thisGeneration = generation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    guard !didResume, thisGeneration == generation else { return }
+                    finish()
+                }
             }
         }
     }
