@@ -42,15 +42,21 @@ enum TranscriptionService {
         let asset = AVURLAsset(url: fileURL)
         let duration = try await asset.load(.duration).seconds
 
+        // Splitting at a fixed `maxChunkDuration` and letting the remainder
+        // trail off as its own tiny chunk (e.g. a 51s recording becoming
+        // 25s/25s/1s) produces a near-empty, often mid-word final chunk.
+        // Instead spread the recording evenly across however many chunks it
+        // needs, so every chunk is a similar, reasonable length.
         let chunkCount = max(1, Int((duration / maxChunkDuration).rounded(.up)))
+        let chunkDuration = duration / Double(chunkCount)
         var transcripts: [String] = []
         var tempFiles: [URL] = []
         defer { for url in tempFiles { try? FileManager.default.removeItem(at: url) } }
 
         for index in 0..<chunkCount {
             onProgress?("Transcribing part \(index + 1) of \(chunkCount)…")
-            let start = Double(index) * maxChunkDuration
-            let end = min(start + maxChunkDuration, duration)
+            let start = Double(index) * chunkDuration
+            let end = index == chunkCount - 1 ? duration : start + chunkDuration
             let chunkURL = try await exportChunk(asset: asset, start: start, end: end)
             tempFiles.append(chunkURL)
             let text = try await transcribeChunk(fileURL: chunkURL)
@@ -82,17 +88,17 @@ enum TranscriptionService {
     /// directly) has a well-known on-device truncation bug: it silently
     /// gives up partway through and reports whatever partial hypothesis it
     /// had as the final result — no error, no signal anything was lost.
-    ///
-    /// `SFSpeechAudioBufferRecognitionRequest` is built around exactly one
-    /// well-tested feeding pattern: a live tap on an `AVAudioEngine` node,
-    /// the same mechanism used for live mic dictation. Two earlier attempts
-    /// tried to approximate that by hand — appending decoded buffers as fast
-    /// as possible, then with a manual sleep between each — and both still
-    /// produced garbled, incomplete transcripts, because a hand-timed
-    /// approximation isn't the same as the engine's actual real-time render
-    /// clock. This plays the chunk back (muted) through a player node and
-    /// taps its real output, which gives the recognizer the exact cadence
-    /// it expects with no timing guesswork.
+    /// Feeding audio via a real `AVAudioEngine` tap (played back muted
+    /// through a player node) rather than any hand-timed buffer loop rules
+    /// out the *feeding mechanism* as the cause — every mechanism tried
+    /// (raw file, dumped buffers, sleep-paced buffers, engine-tapped
+    /// buffers) reproduced the exact same symptom: each chunk's returned
+    /// text is only the *tail* of what it should contain, as if the
+    /// consolidated final result regresses to a shorter version of what the
+    /// recognizer had already produced. `shouldReportPartialResults = false`
+    /// was the one setting never varied across those attempts — so instead
+    /// of trusting the final result's own text, every result (partial and
+    /// final) is tracked and the longest one seen is what's returned.
     private static func transcribeChunk(fileURL: URL) async throws -> String {
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
               recognizer.isAvailable else {
@@ -107,7 +113,7 @@ enum TranscriptionService {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.requiresOnDeviceRecognition = true
-        request.shouldReportPartialResults = false
+        request.shouldReportPartialResults = true
 
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
@@ -117,6 +123,7 @@ enum TranscriptionService {
 
         return try await withCheckedThrowingContinuation { continuation in
             var didFinish = false
+            var longestSoFar = ""
             func finish(_ result: Result<String, Error>) {
                 guard !didFinish else { return }
                 didFinish = true
@@ -130,11 +137,15 @@ enum TranscriptionService {
 
             recognizer.recognitionTask(with: request) { result, error in
                 if let error {
-                    finish(.failure(error))
+                    // If we'd already captured something before the error,
+                    // prefer returning that over failing the whole chunk.
+                    finish(longestSoFar.isEmpty ? .failure(error) : .success(longestSoFar))
                     return
                 }
-                guard let result, result.isFinal else { return }
-                finish(.success(result.bestTranscription.formattedString))
+                guard let result else { return }
+                let text = result.bestTranscription.formattedString
+                if text.count > longestSoFar.count { longestSoFar = text }
+                if result.isFinal { finish(.success(longestSoFar)) }
             }
 
             // Tap the player's own bus (pre-mixer, pre-mute) so the
