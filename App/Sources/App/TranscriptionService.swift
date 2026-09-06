@@ -82,10 +82,17 @@ enum TranscriptionService {
     /// directly) has a well-known on-device truncation bug: it silently
     /// gives up partway through and reports whatever partial hypothesis it
     /// had as the final result — no error, no signal anything was lost.
-    /// Feeding the same audio through `SFSpeechAudioBufferRecognitionRequest`
-    /// instead — the API designed for live mic dictation — sidesteps it
-    /// entirely, since that's the well-tested path Apple's own dictation
-    /// UI relies on.
+    ///
+    /// `SFSpeechAudioBufferRecognitionRequest` is built around exactly one
+    /// well-tested feeding pattern: a live tap on an `AVAudioEngine` node,
+    /// the same mechanism used for live mic dictation. Two earlier attempts
+    /// tried to approximate that by hand — appending decoded buffers as fast
+    /// as possible, then with a manual sleep between each — and both still
+    /// produced garbled, incomplete transcripts, because a hand-timed
+    /// approximation isn't the same as the engine's actual real-time render
+    /// clock. This plays the chunk back (muted) through a player node and
+    /// taps its real output, which gives the recognizer the exact cadence
+    /// it expects with no timing guesswork.
     private static func transcribeChunk(fileURL: URL) async throws -> String {
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
               recognizer.isAvailable else {
@@ -96,47 +103,58 @@ enum TranscriptionService {
         }
 
         let audioFile = try AVAudioFile(forReading: fileURL)
+        let format = audioFile.processingFormat
+
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
 
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        engine.mainMixerNode.outputVolume = 0
+
         return try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
+            var didFinish = false
+            func finish(_ result: Result<String, Error>) {
+                guard !didFinish else { return }
+                didFinish = true
+                player.removeTap(onBus: 0)
+                engine.stop()
+                switch result {
+                case .success(let text): continuation.resume(returning: text)
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            }
+
             recognizer.recognitionTask(with: request) { result, error in
-                guard !didResume else { return }
                 if let error {
-                    didResume = true
-                    continuation.resume(throwing: error)
+                    finish(.failure(error))
                     return
                 }
                 guard let result, result.isFinal else { return }
-                didResume = true
-                continuation.resume(returning: result.bestTranscription.formattedString)
+                finish(.success(result.bestTranscription.formattedString))
             }
 
-            // SFSpeechAudioBufferRecognitionRequest expects buffers to
-            // arrive at roughly the pace they would from a live mic tap.
-            // Dumping the whole file in as fast as the CPU can decode it
-            // (previous attempt) starves the recognizer's endpointing and
-            // produces scattered, garbled fragments instead of a clean
-            // transcript — so each buffer is paced to its own duration.
-            Task {
-                let format = audioFile.processingFormat
-                let frameCapacity = AVAudioFrameCount(format.sampleRate * 0.1) // ~100ms per buffer
-                do {
-                    while true {
-                        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else { break }
-                        try audioFile.read(into: buffer)
-                        if buffer.frameLength == 0 { break }
-                        request.append(buffer)
-                        let seconds = Double(buffer.frameLength) / format.sampleRate
-                        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                    }
-                } catch {
-                    // Fall through to endAudio() with whatever was read so far.
-                }
+            // Tap the player's own bus (pre-mixer, pre-mute) so the
+            // recognizer gets clean, full-volume samples driven by the
+            // engine's real playback clock.
+            player.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
+                request.append(buffer)
+            }
+
+            do {
+                try engine.start()
+            } catch {
+                finish(.failure(error))
+                return
+            }
+
+            player.scheduleFile(audioFile, at: nil) {
                 request.endAudio()
             }
+            player.play()
         }
     }
 }
