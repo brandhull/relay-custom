@@ -37,10 +37,23 @@ final class BackupManager: ObservableObject {
         guard let bookmark = UserDefaults.standard.data(forKey: bookmarkKey) else { return nil }
         var isStale = false
         guard let url = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale) else { return nil }
+        if isStale, url.startAccessingSecurityScopedResource() {
+            defer { url.stopAccessingSecurityScopedResource() }
+            if let refreshed = try? url.bookmarkData() {
+                UserDefaults.standard.set(refreshed, forKey: bookmarkKey)
+            }
+        }
         return url
     }
 
     /// Copies a recording's audio file into the chosen backup folder, if one is set.
+    ///
+    /// The destination is typically a File Provider location (iCloud Drive),
+    /// not a plain filesystem path. A bare `FileManager.copyItem` can report
+    /// success while the provider never actually registers the write for
+    /// upload, so the copy runs through `NSFileCoordinator` — the mechanism
+    /// Apple's own docs require for writing into a folder obtained via
+    /// `UIDocumentPickerViewController`.
     @discardableResult
     func backup(fileURL: URL) -> Bool {
         guard let folder = resolveFolderURL() else { return false }
@@ -48,16 +61,27 @@ final class BackupManager: ObservableObject {
         defer { folder.stopAccessingSecurityScopedResource() }
 
         let destination = folder.appendingPathComponent(fileURL.lastPathComponent)
-        do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
+        let coordinator = NSFileCoordinator()
+        var coordinationError: NSError?
+        var copySucceeded = false
+
+        coordinator.coordinate(writingItemAt: destination, options: .forReplacing, error: &coordinationError) { coordinatedURL in
+            do {
+                if FileManager.default.fileExists(atPath: coordinatedURL.path) {
+                    try FileManager.default.removeItem(at: coordinatedURL)
+                }
+                try FileManager.default.copyItem(at: fileURL, to: coordinatedURL)
+                copySucceeded = true
+            } catch {
+                print("Backup copy failed: \(error)")
             }
-            try FileManager.default.copyItem(at: fileURL, to: destination)
-            return true
-        } catch {
-            print("Backup copy failed: \(error)")
+        }
+
+        if let coordinationError {
+            print("Backup coordination failed: \(coordinationError)")
             return false
         }
+        return copySucceeded
     }
 }
 

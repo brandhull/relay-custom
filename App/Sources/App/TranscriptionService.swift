@@ -100,7 +100,7 @@ enum TranscriptionService {
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
 
-        let text: String = try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             var didResume = false
             recognizer.recognitionTask(with: request) { result, error in
                 guard !didResume else { return }
@@ -114,20 +114,29 @@ enum TranscriptionService {
                 continuation.resume(returning: result.bestTranscription.formattedString)
             }
 
-            let format = audioFile.processingFormat
-            let frameCapacity: AVAudioFrameCount = 4096
-            do {
-                while true {
-                    guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else { break }
-                    try audioFile.read(into: buffer)
-                    if buffer.frameLength == 0 { break }
-                    request.append(buffer)
+            // SFSpeechAudioBufferRecognitionRequest expects buffers to
+            // arrive at roughly the pace they would from a live mic tap.
+            // Dumping the whole file in as fast as the CPU can decode it
+            // (previous attempt) starves the recognizer's endpointing and
+            // produces scattered, garbled fragments instead of a clean
+            // transcript — so each buffer is paced to its own duration.
+            Task {
+                let format = audioFile.processingFormat
+                let frameCapacity = AVAudioFrameCount(format.sampleRate * 0.1) // ~100ms per buffer
+                do {
+                    while true {
+                        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else { break }
+                        try audioFile.read(into: buffer)
+                        if buffer.frameLength == 0 { break }
+                        request.append(buffer)
+                        let seconds = Double(buffer.frameLength) / format.sampleRate
+                        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    }
+                } catch {
+                    // Fall through to endAudio() with whatever was read so far.
                 }
-            } catch {
-                // Fall through to endAudio() with whatever was read so far.
+                request.endAudio()
             }
-            request.endAudio()
         }
-        return text
     }
 }
