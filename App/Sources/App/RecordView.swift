@@ -54,9 +54,8 @@ struct RecordView: View {
                         }
                         .disabled(recorder.isPaused)
                         .opacity(recorder.isPaused ? 0.4 : 1)
+                        .padding(.bottom, 20)
                     }
-
-                    Spacer()
 
                     HStack(spacing: 32) {
                         if recorder.isRecording {
