@@ -37,8 +37,8 @@ struct EditRecordingView: View {
                 .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 14)
                 .background(Theme.bg)
         }
         .navigationTitle("Edit")
@@ -73,7 +73,7 @@ struct EditRecordingView: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 TextField("Title", text: $recording.episode.title)
                     .font(.headline)
@@ -104,7 +104,7 @@ struct EditRecordingView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .frame(height: 100)
+                .frame(height: 84)
 
                 HStack {
                     Text(timeString(player.currentTime))
@@ -136,7 +136,7 @@ struct EditRecordingView: View {
                         player.togglePlay()
                     } label: {
                         Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 44))
+                            .font(.system(size: 38))
                             .foregroundStyle(Theme.muted)
                     }
                     if !recording.flags.isEmpty {
@@ -151,9 +151,8 @@ struct EditRecordingView: View {
                     }
                     Spacer()
                 }
-                .padding(.vertical, 4)
 
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     if trimStart > 0 || trimEnd < 1 {
                         Toggle("Replace original instead of saving a copy", isOn: $overwriteOriginal)
                             .font(.caption)
@@ -203,7 +202,7 @@ struct EditRecordingView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.top, 12)
     }
 
     /// All three bottom actions live in one VStack with one spacing value,
@@ -216,7 +215,7 @@ struct EditRecordingView: View {
     /// arithmetic to get wrong. Guarantees clearance from the home
     /// indicator regardless of how tall the scrollable content above is.
     private var footer: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 14) {
             if !recording.audioRemovedLocally {
                 Button {
                     showShareSheet = true
@@ -264,8 +263,8 @@ struct EditRecordingView: View {
         Button {
             Task { await action() }
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 18))
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 16))
                 Text(title).font(.caption)
             }
         }

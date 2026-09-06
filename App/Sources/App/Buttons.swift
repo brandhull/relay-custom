@@ -5,6 +5,11 @@ import SwiftUI
 // tinted style for lighter-weight actions like Share.
 private let actionCornerRadius: CGFloat = 14
 private let actionVerticalPadding: CGFloat = 14
+// Only used on the Edit screen's 2x2 quick-action grid, which needs to fit
+// alongside the waveform and the three footer buttons with no scrolling —
+// its own smaller constant so shrinking it doesn't touch every other
+// button in the app that shares actionVerticalPadding.
+private let quickActionVerticalPadding: CGFloat = 8
 
 struct PrimaryActionButtonStyle: ButtonStyle {
     var isEnabled: Bool = true
@@ -56,7 +61,7 @@ struct QuickActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(maxWidth: .infinity)
-            .padding(.vertical, actionVerticalPadding)
+            .padding(.vertical, quickActionVerticalPadding)
             .background(RoundedRectangle(cornerRadius: actionCornerRadius).fill(Theme.card))
             .foregroundStyle(Theme.fg)
             .opacity(configuration.isPressed ? 0.7 : 1)
