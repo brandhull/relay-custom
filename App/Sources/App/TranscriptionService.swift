@@ -35,10 +35,15 @@ enum TranscriptionService {
     }
 
     /// Transcribes fully on-device — nothing about the audio leaves the
-    /// phone. Always chunks (even short recordings) and stitches the
-    /// results together, since on-device recognition has proven unreliable
-    /// on a single request even well under a minute.
+    /// phone. Prefers the iOS 26 `SpeechAnalyzer` path (see
+    /// `AppleSpeechAnalyzerService`), which handles the whole recording in
+    /// one call with no manual chunking. Falls back to the chunked
+    /// `SFSpeechRecognizer` path below for iOS 17–25.
     static func transcribe(fileURL: URL, onProgress: ((String) -> Void)? = nil) async throws -> String {
+        if #available(iOS 26.0, *), await AppleSpeechAnalyzerService.isAvailable() {
+            return try await AppleSpeechAnalyzerService.transcribe(fileURL: fileURL, onProgress: onProgress)
+        }
+
         let asset = AVURLAsset(url: fileURL)
         let duration = try await asset.load(.duration).seconds
 
