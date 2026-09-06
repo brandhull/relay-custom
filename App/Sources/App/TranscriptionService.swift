@@ -114,6 +114,7 @@ enum TranscriptionService {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = true
+        request.addsPunctuation = true
 
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
