@@ -42,6 +42,22 @@ struct RecordView: View {
 
                     Spacer()
 
+                    if recorder.isRecording {
+                        Button {
+                            recorder.addFlag()
+                        } label: {
+                            Image(systemName: "flag.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Theme.accent)
+                                .frame(width: 48, height: 48)
+                                .overlay(Circle().stroke(Theme.accent, lineWidth: 1.5))
+                        }
+                        .disabled(recorder.isPaused)
+                        .opacity(recorder.isPaused ? 0.4 : 1)
+                    }
+
+                    Spacer()
+
                     HStack(spacing: 32) {
                         if recorder.isRecording {
                             Button {
@@ -119,13 +135,15 @@ struct RecordView: View {
     private func toggleRecord() {
         if recorder.isRecording {
             let duration = recorder.stop()
+            let flags = recorder.takePendingFlags()
             guard let url = recorder.outputURL else { return }
             var recording = Recording(
                 id: UUID(),
                 fileName: url.lastPathComponent,
                 createdAt: Date(),
                 duration: duration,
-                episode: EpisodeDraft(title: defaultTitle())
+                episode: EpisodeDraft(title: defaultTitle()),
+                flags: flags
             )
             store.add(recording)
             if settings.iCloudBackupEnabled {

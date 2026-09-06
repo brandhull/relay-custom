@@ -3,6 +3,12 @@ import Combine
 
 @MainActor
 final class RecordingStore: ObservableObject {
+    /// Single shared instance, reachable from both the SwiftUI environment
+    /// (RelayApp wires this in as its @StateObject) and from AppIntents,
+    /// which run in-process but outside the view hierarchy and can't reach
+    /// an @EnvironmentObject.
+    static let shared = RecordingStore()
+
     @Published private(set) var recordings: [Recording] = []
 
     private var indexURL: URL {

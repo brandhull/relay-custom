@@ -32,6 +32,15 @@ struct EditRecordingView: View {
                 .frame(maxWidth: .infinity)
         }
         .background(Theme.bg.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            footer
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 20)
+                .background(Theme.bg)
+        }
         .navigationTitle("Edit")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
@@ -78,7 +87,6 @@ struct EditRecordingView: View {
 
             if recording.audioRemovedLocally {
                 audioRemovedNotice
-                Spacer()
             } else {
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 12)
@@ -90,6 +98,11 @@ struct EditRecordingView: View {
                     .padding(.horizontal, 16)
                     TrimSelectorOverlay(trimStart: $trimStart, trimEnd: $trimEnd)
                         .padding(.horizontal, 16)
+                    if recording.duration > 0 {
+                        FlagTicksOverlay(flags: recording.flags, duration: recording.duration)
+                            .padding(.horizontal, 16)
+                            .allowsHitTesting(false)
+                    }
                 }
                 .frame(height: 100)
 
@@ -106,14 +119,35 @@ struct EditRecordingView: View {
                 .font(.caption)
                 .foregroundStyle(Theme.muted)
 
-                HStack {
+                HStack(spacing: 28) {
                     Spacer()
+                    if !recording.flags.isEmpty {
+                        Button {
+                            jumpToFlag(before: player.currentTime)
+                        } label: {
+                            Image(systemName: "flag.fill")
+                                .font(.system(size: 16))
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(previousFlag(before: player.currentTime) == nil ? Theme.muted.opacity(0.4) : Theme.accent)
+                        }
+                        .disabled(previousFlag(before: player.currentTime) == nil)
+                    }
                     Button {
                         player.togglePlay()
                     } label: {
                         Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 44))
                             .foregroundStyle(Theme.muted)
+                    }
+                    if !recording.flags.isEmpty {
+                        Button {
+                            jumpToFlag(after: player.currentTime)
+                        } label: {
+                            Image(systemName: "flag.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(nextFlag(after: player.currentTime) == nil ? Theme.muted.opacity(0.4) : Theme.accent)
+                        }
+                        .disabled(nextFlag(after: player.currentTime) == nil)
                     }
                     Spacer()
                 }
@@ -152,8 +186,6 @@ struct EditRecordingView: View {
                     }
                 }
 
-                Spacer()
-
                 if let statusMessage {
                     Text(statusMessage)
                         .font(.caption)
@@ -168,7 +200,24 @@ struct EditRecordingView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+    }
 
+    /// All three bottom actions live in one VStack with one spacing value,
+    /// pinned outside the ScrollView via `.safeAreaInset(edge: .bottom)` —
+    /// deliberately not split across the scrollable content and this footer
+    /// with separately-guessed padding on each side, which is what made the
+    /// gap between Share Recording and Continue to Episode Details collapse
+    /// to near-nothing while Delete Recording got an oversized gap above it
+    /// the first time this was "fixed." One VStack, one spacing, no
+    /// arithmetic to get wrong. Guarantees clearance from the home
+    /// indicator regardless of how tall the scrollable content above is.
+    private var footer: some View {
+        VStack(spacing: 20) {
+            if !recording.audioRemovedLocally {
                 Button {
                     showShareSheet = true
                 } label: {
@@ -191,7 +240,6 @@ struct EditRecordingView: View {
             }
             .buttonStyle(.destructiveAction)
         }
-        .padding(20)
     }
 
     private var audioRemovedNotice: some View {
@@ -334,6 +382,28 @@ struct EditRecordingView: View {
         dismiss()
     }
 
+    /// A small tolerance so re-tapping "previous" while sitting exactly on a
+    /// flag jumps to the one before it, not right back to itself.
+    private static let flagSeekTolerance: TimeInterval = 0.25
+
+    private func previousFlag(before time: TimeInterval) -> TimeInterval? {
+        recording.flags.filter { $0 < time - Self.flagSeekTolerance }.max()
+    }
+
+    private func nextFlag(after time: TimeInterval) -> TimeInterval? {
+        recording.flags.filter { $0 > time + Self.flagSeekTolerance }.min()
+    }
+
+    private func jumpToFlag(before time: TimeInterval) {
+        guard let target = previousFlag(before: time) else { return }
+        player.seek(to: target)
+    }
+
+    private func jumpToFlag(after time: TimeInterval) {
+        guard let target = nextFlag(after: time) else { return }
+        player.seek(to: target)
+    }
+
     private func timeString(_ t: TimeInterval) -> String {
         let m = Int(t) / 60
         let s = Int(t) % 60
@@ -410,6 +480,24 @@ private struct TrimSelectorOverlay: View {
         }
         .contentShape(Rectangle())
         .offset(x: x - handleWidth / 2)
+    }
+}
+
+/// Small blue tick marks over the waveform at each flagged timestamp —
+/// jump-points only, purely visual (hit-testing disabled by the caller).
+private struct FlagTicksOverlay: View {
+    let flags: [TimeInterval]
+    let duration: TimeInterval
+
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(Array(flags.enumerated()), id: \.offset) { _, flag in
+                Capsule()
+                    .fill(Theme.accent)
+                    .frame(width: 3, height: 20)
+                    .position(x: CGFloat(flag / duration) * geo.size.width, y: 8)
+            }
+        }
     }
 }
 

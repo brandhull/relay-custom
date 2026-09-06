@@ -4,11 +4,19 @@ import Combine
 
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject {
+    /// Single shared instance — see RecordingStore.shared for why AppIntents
+    /// need this instead of relying on SwiftUI environment injection alone.
+    static let shared = AudioRecorder()
+
     @Published var isRecording = false
     @Published var isPaused = false
     @Published var elapsed: TimeInterval = 0
     @Published var currentInputName: String = "Built-in Microphone"
     @Published var meterLevel: Float = 0 // 0...1
+    /// Timestamps flagged during the recording in progress. Copied onto the
+    /// `Recording` when it's created in `RecordView`, then cleared here for
+    /// the next take.
+    @Published private(set) var pendingFlags: [TimeInterval] = []
 
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
@@ -125,6 +133,21 @@ final class AudioRecorder: NSObject, ObservableObject {
         currentInputName = port.portName
     }
 
+    /// Marks the current moment as a flag. Only meaningful while actively
+    /// recording (not paused) — the elapsed clock is frozen while paused, so
+    /// flagging then would just duplicate whatever the last real flag was.
+    func addFlag() {
+        guard isRecording, !isPaused else { return }
+        pendingFlags.append(elapsed)
+    }
+
+    /// Hands back the flags captured during this take and resets for the
+    /// next one.
+    func takePendingFlags() -> [TimeInterval] {
+        defer { pendingFlags = [] }
+        return pendingFlags
+    }
+
     func startRecording() {
         configureSessionPreferringExternalMic()
 
@@ -147,6 +170,7 @@ final class AudioRecorder: NSObject, ObservableObject {
             isRecording = true
             isPaused = false
             accumulated = 0
+            pendingFlags = []
             startDate = Date()
             startTimer()
         } catch {

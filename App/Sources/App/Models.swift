@@ -16,6 +16,9 @@ struct Recording: Identifiable, Codable, Equatable, Hashable {
     /// True once this recording's transcript/summary has been sent to
     /// Craft — drives the Library row's destination badges.
     var sentToCraft: Bool = false
+    /// Timestamps (seconds from the start of the recording) flagged during
+    /// capture as moments to revisit later — jump-points only, no labels.
+    var flags: [TimeInterval] = []
 
     var fileURL: URL {
         Recording.directory.appendingPathComponent(fileName)
@@ -24,10 +27,10 @@ struct Recording: Identifiable, Codable, Equatable, Hashable {
     // Custom Codable so older saved recordings (before these fields existed)
     // still decode instead of silently losing the whole library.
     enum CodingKeys: String, CodingKey {
-        case id, fileName, createdAt, duration, episode, audioRemovedLocally, backedUpToICloud, sentToCraft
+        case id, fileName, createdAt, duration, episode, audioRemovedLocally, backedUpToICloud, sentToCraft, flags
     }
 
-    init(id: UUID, fileName: String, createdAt: Date, duration: TimeInterval, episode: EpisodeDraft, audioRemovedLocally: Bool = false, backedUpToICloud: Bool = false, sentToCraft: Bool = false) {
+    init(id: UUID, fileName: String, createdAt: Date, duration: TimeInterval, episode: EpisodeDraft, audioRemovedLocally: Bool = false, backedUpToICloud: Bool = false, sentToCraft: Bool = false, flags: [TimeInterval] = []) {
         self.id = id
         self.fileName = fileName
         self.createdAt = createdAt
@@ -36,6 +39,7 @@ struct Recording: Identifiable, Codable, Equatable, Hashable {
         self.audioRemovedLocally = audioRemovedLocally
         self.backedUpToICloud = backedUpToICloud
         self.sentToCraft = sentToCraft
+        self.flags = flags
     }
 
     init(from decoder: Decoder) throws {
@@ -48,6 +52,7 @@ struct Recording: Identifiable, Codable, Equatable, Hashable {
         audioRemovedLocally = try container.decodeIfPresent(Bool.self, forKey: .audioRemovedLocally) ?? false
         backedUpToICloud = try container.decodeIfPresent(Bool.self, forKey: .backedUpToICloud) ?? false
         sentToCraft = try container.decodeIfPresent(Bool.self, forKey: .sentToCraft) ?? false
+        flags = try container.decodeIfPresent([TimeInterval].self, forKey: .flags) ?? []
     }
 
     static var directory: URL {
