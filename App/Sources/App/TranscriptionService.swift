@@ -78,6 +78,14 @@ enum TranscriptionService {
         return outputURL
     }
 
+    /// `SFSpeechURLRecognitionRequest` (handing the recognizer a file
+    /// directly) has a well-known on-device truncation bug: it silently
+    /// gives up partway through and reports whatever partial hypothesis it
+    /// had as the final result — no error, no signal anything was lost.
+    /// Feeding the same audio through `SFSpeechAudioBufferRecognitionRequest`
+    /// instead — the API designed for live mic dictation — sidesteps it
+    /// entirely, since that's the well-tested path Apple's own dictation
+    /// UI relies on.
     private static func transcribeChunk(fileURL: URL) async throws -> String {
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
               recognizer.isAvailable else {
@@ -87,46 +95,39 @@ enum TranscriptionService {
             throw TranscriptionError.recognizerUnavailable
         }
 
-        let request = SFSpeechURLRecognitionRequest(url: fileURL)
+        let audioFile = try AVAudioFile(forReading: fileURL)
+        let request = SFSpeechAudioBufferRecognitionRequest()
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
 
-        // File-based on-device recognition delivers `isFinal` once per
-        // detected phrase/pause within the file, not once for the whole
-        // request — treating the first `isFinal` as "done" silently drops
-        // every segment after it. Instead, collect every final segment and
-        // only resolve once no further segment has arrived for a beat.
-        return try await withCheckedThrowingContinuation { continuation in
+        let text: String = try await withCheckedThrowingContinuation { continuation in
             var didResume = false
-            var segments: [String] = []
-            var generation = 0
-
-            func finish() {
-                guard !didResume else { return }
-                didResume = true
-                continuation.resume(returning: segments.joined(separator: " "))
-            }
-
             recognizer.recognitionTask(with: request) { result, error in
                 guard !didResume else { return }
                 if let error {
-                    if segments.isEmpty {
-                        didResume = true
-                        continuation.resume(throwing: error)
-                    } else {
-                        finish()
-                    }
+                    didResume = true
+                    continuation.resume(throwing: error)
                     return
                 }
                 guard let result, result.isFinal else { return }
-                segments.append(result.bestTranscription.formattedString)
-                generation += 1
-                let thisGeneration = generation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    guard !didResume, thisGeneration == generation else { return }
-                    finish()
-                }
+                didResume = true
+                continuation.resume(returning: result.bestTranscription.formattedString)
             }
+
+            let format = audioFile.processingFormat
+            let frameCapacity: AVAudioFrameCount = 4096
+            do {
+                while true {
+                    guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else { break }
+                    try audioFile.read(into: buffer)
+                    if buffer.frameLength == 0 { break }
+                    request.append(buffer)
+                }
+            } catch {
+                // Fall through to endAudio() with whatever was read so far.
+            }
+            request.endAudio()
         }
+        return text
     }
 }
