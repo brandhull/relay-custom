@@ -212,6 +212,24 @@ final class AudioRecorder: NSObject, ObservableObject {
         return final
     }
 
+    /// Stops recording and discards it entirely — deletes the audio file
+    /// rather than handing back a duration for the caller to save. Used by
+    /// the Record screen's cancel button.
+    func cancel() {
+        recorder?.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if let outputURL {
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        isRecording = false
+        isPaused = false
+        stopTimer()
+        elapsed = 0
+        accumulated = 0
+        outputURL = nil
+        pendingFlags = []
+    }
+
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in

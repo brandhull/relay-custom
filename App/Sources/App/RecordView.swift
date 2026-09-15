@@ -6,6 +6,7 @@ struct RecordView: View {
     @EnvironmentObject var backupManager: BackupManager
     @EnvironmentObject var recorder: AudioRecorder
     @State private var justRecorded: Recording?
+    @State private var showCancelConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -58,17 +59,23 @@ struct RecordView: View {
                     }
 
                     HStack(spacing: 32) {
-                        if recorder.isRecording {
-                            Button {
-                                if recorder.isPaused { recorder.resume() } else { recorder.pause() }
-                            } label: {
-                                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(Theme.danger)
-                                    .frame(width: 52, height: 52)
-                                    .background(Circle().fill(Theme.card))
-                            }
+                        // Pause and cancel are always laid out (just hidden
+                        // and non-interactive while idle) so the record
+                        // button's own position never shifts when they
+                        // appear — it stays exactly centered before, during,
+                        // and after recording starts.
+                        Button {
+                            if recorder.isPaused { recorder.resume() } else { recorder.pause() }
+                        } label: {
+                            Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(Theme.danger)
+                                .frame(width: 52, height: 52)
+                                .background(Circle().fill(Theme.card))
                         }
+                        .opacity(recorder.isRecording ? 1 : 0)
+                        .disabled(!recorder.isRecording)
+                        .allowsHitTesting(recorder.isRecording)
 
                         Button {
                             toggleRecord()
@@ -93,6 +100,19 @@ struct RecordView: View {
                                 }
                             }
                         }
+
+                        Button {
+                            showCancelConfirm = true
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(Theme.danger)
+                                .frame(width: 52, height: 52)
+                                .background(Circle().fill(Theme.card))
+                        }
+                        .opacity(recorder.isRecording ? 1 : 0)
+                        .disabled(!recorder.isRecording)
+                        .allowsHitTesting(recorder.isRecording)
                     }
                     .padding(.bottom, 40)
 
@@ -111,6 +131,16 @@ struct RecordView: View {
             .toolbarBackground(Theme.bg, for: .navigationBar)
             .navigationDestination(item: $justRecorded) { recording in
                 EditRecordingView(recording: recording)
+            }
+            .confirmationDialog(
+                "Discard this recording?",
+                isPresented: $showCancelConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Recording", role: .destructive) { recorder.cancel() }
+                Button("Keep Recording", role: .cancel) {}
+            } message: {
+                Text("This deletes the audio and can't be undone.")
             }
         }
         .task {
