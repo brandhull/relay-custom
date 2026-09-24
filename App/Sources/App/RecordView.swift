@@ -125,10 +125,40 @@ struct RecordView: View {
                     .padding(.bottom, 40)
 
                     if !recorder.currentInputName.isEmpty {
+                        #if os(macOS)
+                        // A Mac's default input can be a virtual/routing
+                        // device rather than a real mic (see AudioRecorder's
+                        // notes) — letting Relay pick a specific device
+                        // itself, scoped to just this app, avoids depending
+                        // on whatever System Settings' default happens to
+                        // be at record time.
+                        Menu {
+                            Button("System Default") {
+                                recorder.selectedInputDeviceUID = nil
+                                recorder.refreshCurrentInputName()
+                            }
+                            Divider()
+                            ForEach(AudioInputDeviceLister.availableInputDevices()) { device in
+                                Button(device.name) {
+                                    recorder.selectedInputDeviceUID = device.uid
+                                    recorder.refreshCurrentInputName()
+                                }
+                            }
+                        } label: {
+                            Label(recorder.currentInputName, systemImage: micIcon)
+                                .font(.caption)
+                                .foregroundStyle(Theme.muted)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .disabled(recorder.isRecording)
+                        .padding(.bottom, 24)
+                        #else
                         Label(recorder.currentInputName, systemImage: micIcon)
                             .font(.caption)
                             .foregroundStyle(Theme.muted)
                             .padding(.bottom, 24)
+                        #endif
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -24,8 +24,28 @@ final class AudioRecorder: NSObject, ObservableObject {
     private var accumulated: TimeInterval = 0
     private(set) var outputURL: URL?
 
+    #if os(macOS)
+    /// The CoreAudio device UID to record from, or nil for "System Default".
+    /// Local to this Mac — not synced via AppSettings' iCloud store, since a
+    /// specific device UID is meaningless on another machine (or on iOS).
+    @Published var selectedInputDeviceUID: String? {
+        didSet { UserDefaults.standard.set(selectedInputDeviceUID, forKey: "macSelectedInputDeviceUID") }
+    }
+    private var engine: AVAudioEngine?
+    private var audioFile: AVAudioFile?
+    /// The tap fires on a real-time audio thread, not the main actor —
+    /// gating the (synchronous, in-order) buffer write on this plain flag
+    /// avoids hopping to the main actor per-buffer, which risks writes
+    /// landing out of order under load. Mirrors `isPaused` whenever it
+    /// changes; only this flag is read by the tap itself.
+    nonisolated(unsafe) private var captureIsPaused = false
+    #endif
+
     override init() {
         super.init()
+        #if os(macOS)
+        selectedInputDeviceUID = UserDefaults.standard.string(forKey: "macSelectedInputDeviceUID")
+        #endif
         #if os(iOS)
         NotificationCenter.default.addObserver(
             self, selector: #selector(routeChanged),
@@ -79,11 +99,22 @@ final class AudioRecorder: NSObject, ObservableObject {
         try? session.setActive(true)
         refreshPreferredInput()
         #else
-        if let name = AVCaptureDevice.default(for: .audio)?.localizedName {
-            currentInputName = name
-        }
+        refreshCurrentInputName()
         #endif
     }
+
+    #if os(macOS)
+    /// Reflects whichever device recording will actually use — the picked
+    /// device if one is set, otherwise the system default.
+    func refreshCurrentInputName() {
+        if let uid = selectedInputDeviceUID,
+           let device = AudioInputDeviceLister.availableInputDevices().first(where: { $0.uid == uid }) {
+            currentInputName = device.name
+        } else if let name = AVCaptureDevice.default(for: .audio)?.localizedName {
+            currentInputName = name
+        }
+    }
+    #endif
 
     #if os(iOS)
     /// Re-derives the current input, preferring an external mic. Deliberately
@@ -185,6 +216,19 @@ final class AudioRecorder: NSObject, ObservableObject {
         let url = Recording.directory.appendingPathComponent(fileName)
         outputURL = url
 
+        #if os(macOS)
+        do {
+            try startEngineRecording(to: url)
+            isRecording = true
+            isPaused = false
+            accumulated = 0
+            pendingFlags = []
+            startDate = Date()
+            startTimer()
+        } catch {
+            print("Recording failed to start: \(error)")
+        }
+        #else
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 44100,
@@ -206,10 +250,93 @@ final class AudioRecorder: NSObject, ObservableObject {
         } catch {
             print("Recording failed to start: \(error)")
         }
+        #endif
     }
+
+    #if os(macOS)
+    /// Records via AVAudioEngine, bound to the picked device when one is
+    /// set — scoped to this app's own audio unit, unlike overwriting the
+    /// system's default input (which would affect every other app until
+    /// changed back). Falls back to the system default when no device is
+    /// picked. The output format matches the input node's own native
+    /// format/channel count rather than a hardcoded 44.1kHz mono — a
+    /// mismatch against a device's real format (e.g. a virtual device
+    /// running at 48kHz) was a likely second contributor to a silent
+    /// recording alongside picking the wrong device outright.
+    private func startEngineRecording(to url: URL) throws {
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+
+        if let uid = selectedInputDeviceUID,
+           let device = AudioInputDeviceLister.availableInputDevices().first(where: { $0.uid == uid }),
+           let audioUnit = inputNode.audioUnit {
+            var deviceID = device.id
+            let status = AudioUnitSetProperty(
+                audioUnit,
+                kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global,
+                0,
+                &deviceID,
+                UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+            if status != noErr {
+                print("Failed to select input device (status \(status)); falling back to system default")
+            }
+        }
+
+        let inputFormat = inputNode.inputFormat(forBus: 0)
+        let outputSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: inputFormat.sampleRate,
+            AVNumberOfChannelsKey: min(inputFormat.channelCount, 2),
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: outputSettings)
+
+        captureIsPaused = false
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+            guard let self, !self.captureIsPaused else { return }
+            // Write happens synchronously, in-order, on this same real-time
+            // thread every time — no actor hop here, since hopping per
+            // buffer risks writes landing out of order under load. The
+            // meter level is purely cosmetic, so it's fine to hop for that.
+            try? file.write(from: buffer)
+            let level = Self.rmsLevel(from: buffer)
+            Task { @MainActor in
+                self.meterLevel = level
+            }
+        }
+
+        try engine.start()
+
+        self.engine = engine
+        self.audioFile = file
+    }
+
+    private nonisolated static func rmsLevel(from buffer: AVAudioPCMBuffer) -> Float {
+        guard let channelData = buffer.floatChannelData else { return 0 }
+        let frameCount = Int(buffer.frameLength)
+        guard frameCount > 0 else { return 0 }
+        let samples = channelData[0]
+        var sum: Float = 0
+        for i in 0..<frameCount { sum += samples[i] * samples[i] }
+        let rms = sqrt(sum / Float(frameCount))
+        return min(max(rms * 4, 0), 1)
+    }
+
+    private func stopEngineRecording() {
+        engine?.inputNode.removeTap(onBus: 0)
+        engine?.stop()
+        engine = nil
+        audioFile = nil
+    }
+    #endif
 
     func pause() {
         recorder?.pause()
+        #if os(macOS)
+        captureIsPaused = true
+        #endif
         isPaused = true
         accumulated += Date().timeIntervalSince(startDate ?? Date())
         stopTimer()
@@ -221,6 +348,9 @@ final class AudioRecorder: NSObject, ObservableObject {
         // from under us; re-activate explicitly rather than assuming
         // `record()` alone will do it.
         try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        #if os(macOS)
+        captureIsPaused = false
         #endif
         recorder?.record()
         isPaused = false
@@ -234,6 +364,9 @@ final class AudioRecorder: NSObject, ObservableObject {
             accumulated += Date().timeIntervalSince(startDate ?? Date())
         }
         recorder?.stop()
+        #if os(macOS)
+        stopEngineRecording()
+        #endif
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
@@ -251,6 +384,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// the Record screen's cancel button.
     func cancel() {
         recorder?.stop()
+        #if os(macOS)
+        stopEngineRecording()
+        #endif
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif

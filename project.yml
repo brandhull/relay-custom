@@ -69,6 +69,7 @@ targets:
       - path: App/Sources/App/AppSettings.swift
       - path: App/Sources/App/BackupManager.swift
       - path: App/Sources/App/AudioRecorder.swift
+      - path: App/Sources/App/AudioInputDevice.swift
       - path: App/Sources/App/CraftAPI.swift # only for the CraftFolder type AppSettings references
       - path: App/Resources
         buildPhase: resources
