@@ -64,7 +64,13 @@ final class AudioRecorder: NSObject, ObservableObject {
     ///
     /// macOS has no `AVAudioSession` — recording there just uses whatever
     /// input is selected in System Settings → Sound (v1 scope; no auto-
-    /// preferring or device enumeration on Mac yet).
+    /// preferring on Mac yet). It DOES reflect the actual current input's
+    /// name, though — unlike iOS's built-in mic, a Mac's default input can
+    /// easily be a virtual/routing device (Loopback, Audio Hijack, etc.)
+    /// instead of a real microphone, and recording from an unrouted virtual
+    /// device silently produces a valid-looking file with no audio in it.
+    /// Surfacing the real name lets that be caught before recording, not
+    /// discovered after.
     func configureSessionPreferringExternalMic() {
         #if os(iOS)
         guard !isRecording else { return }
@@ -72,6 +78,10 @@ final class AudioRecorder: NSObject, ObservableObject {
         try? session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try? session.setActive(true)
         refreshPreferredInput()
+        #else
+        if let name = AVCaptureDevice.default(for: .audio)?.localizedName {
+            currentInputName = name
+        }
         #endif
     }
 
