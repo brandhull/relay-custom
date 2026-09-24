@@ -11,7 +11,11 @@ struct RecordView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
+                #if os(iOS)
                 let isPad = UIDevice.current.userInterfaceIdiom == .pad
+                #else
+                let isPad = false
+                #endif
                 let isPortrait = geo.size.height >= geo.size.width
                 let logoSize: CGFloat = (isPad || isPortrait) ? 56 : 32
 
@@ -53,6 +57,7 @@ struct RecordView: View {
                                 .frame(width: 48, height: 48)
                                 .overlay(Circle().stroke(Theme.accent, lineWidth: 1.5))
                         }
+                        .buttonStyle(.plain)
                         .disabled(recorder.isPaused)
                         .opacity(recorder.isPaused ? 0.4 : 1)
                         .padding(.bottom, 20)
@@ -73,6 +78,7 @@ struct RecordView: View {
                                 .frame(width: 52, height: 52)
                                 .background(Circle().fill(Theme.card))
                         }
+                        .buttonStyle(.plain)
                         .opacity(recorder.isRecording ? 1 : 0)
                         .disabled(!recorder.isRecording)
                         .allowsHitTesting(recorder.isRecording)
@@ -100,6 +106,7 @@ struct RecordView: View {
                                 }
                             }
                         }
+                        .buttonStyle(.plain)
 
                         Button {
                             showCancelConfirm = true
@@ -110,6 +117,7 @@ struct RecordView: View {
                                 .frame(width: 52, height: 52)
                                 .background(Circle().fill(Theme.card))
                         }
+                        .buttonStyle(.plain)
                         .opacity(recorder.isRecording ? 1 : 0)
                         .disabled(!recorder.isRecording)
                         .allowsHitTesting(recorder.isRecording)
@@ -127,11 +135,16 @@ struct RecordView: View {
             }
             .background(Theme.bg)
             .navigationTitle("")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Theme.bg, for: .navigationBar)
+            // EditRecordingView isn't part of Relay-Mac's Phase 1 source
+            // list yet (Phase 2 scope) — on Mac, a finished recording just
+            // saves to the store without auto-navigating anywhere yet.
             .navigationDestination(item: $justRecorded) { recording in
                 EditRecordingView(recording: recording)
             }
+            #endif
             .confirmationDialog(
                 "Discard this recording?",
                 isPresented: $showCancelConfirm,

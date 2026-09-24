@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.brandonhull
   deploymentTarget:
     iOS: "17.0"
+    macOS: "14.0"
 
 targets:
   Relay:
@@ -33,7 +34,12 @@ targets:
     entitlements:
       path: App/Relay.entitlements
       properties:
-        com.apple.developer.ubiquity-kvstore-identifier: "$(TeamIdentifierPrefix)$(CFBundleIdentifier)"
+        # Explicit shared identifier, not the $(CFBundleIdentifier)-derived
+        # default — Relay (iOS) and Relay-Mac are two different bundle IDs,
+        # so the default per-target KVS identifier would give each one its
+        # own isolated iCloud store instead of one shared settings sync.
+        # Both targets use this exact same string (mirrors Arthur's pattern).
+        com.apple.developer.ubiquity-kvstore-identifier: D53LTKT473.com.brandonhull.relay.shared
     settings:
       PRODUCT_NAME: Relay
       PRODUCT_BUNDLE_IDENTIFIER: com.brandonhull.relay
@@ -44,10 +50,57 @@ targets:
       ENABLE_USER_SCRIPT_SANDBOXING: YES
       STRING_CATALOG_GENERATE_SYMBOLS: YES
 
+  Relay-Mac:
+    type: application
+    platform: macOS
+    # Phase 1 (Mac port): a curated subset, not the whole App/Sources/App
+    # folder — most iOS-only screens (Library/Edit/Publish/Settings, Craft/
+    # Baserow/Transistor clients, Shortcuts intents, transcription) don't
+    # compile as-is on macOS yet (UIKit types, AVAudioSession, etc.) and
+    # aren't in Phase 1's scope. Expand this list phase by phase instead of
+    # porting everything at once.
+    sources:
+      - path: App/Sources/App/RelayApp.swift
+      - path: App/Sources/App/RecordView.swift
+      - path: App/Sources/App/Theme.swift
+      - path: App/Sources/App/Models.swift
+      - path: App/Sources/App/RecordingStore.swift
+      - path: App/Sources/App/KeychainHelper.swift
+      - path: App/Sources/App/AppSettings.swift
+      - path: App/Sources/App/BackupManager.swift
+      - path: App/Sources/App/AudioRecorder.swift
+      - path: App/Sources/App/CraftAPI.swift # only for the CraftFolder type AppSettings references
+      - path: App/Resources
+        buildPhase: resources
+    info:
+      path: App/Info-Mac.plist
+      properties:
+        LSMinimumSystemVersion: "14.0"
+        NSMicrophoneUsageDescription: "Relay needs microphone access to record podcast episodes."
+    entitlements:
+      path: App/Relay-Mac.entitlements
+      properties:
+        # Same shared identifier as the iOS target — see its entitlements
+        # comment for why this can't just be the default.
+        com.apple.developer.ubiquity-kvstore-identifier: D53LTKT473.com.brandonhull.relay.shared
+    settings:
+      PRODUCT_NAME: Relay
+      PRODUCT_BUNDLE_IDENTIFIER: com.brandonhull.relay.mac
+      CODE_SIGN_STYLE: Automatic
+      DEVELOPMENT_TEAM: D53LTKT473
+      ENABLE_HARDENED_RUNTIME: true
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
 schemes:
   Relay:
     build:
       targets:
         Relay: all
+    run:
+      config: Debug
+  Relay-Mac:
+    build:
+      targets:
+        Relay-Mac: all
     run:
       config: Debug

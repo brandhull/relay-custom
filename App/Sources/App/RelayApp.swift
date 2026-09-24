@@ -18,6 +18,7 @@ struct RelayApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if os(iOS)
             RootTabView()
                 .environmentObject(store)
                 .environmentObject(settings)
@@ -25,6 +26,23 @@ struct RelayApp: App {
                 .environmentObject(recorder)
                 .preferredColorScheme(nil)
                 .tint(Theme.accent)
+            #else
+            // Phase 1 (Mac port): RootTabView's other tabs (Library,
+            // Settings) aren't ported yet — this window shows Record only,
+            // sized like a small fixed utility window ("like Calculator"),
+            // not a resizable/fullscreen-capable app window.
+            RecordView()
+                .environmentObject(store)
+                .environmentObject(settings)
+                .environmentObject(backupManager)
+                .environmentObject(recorder)
+                .preferredColorScheme(nil)
+                .tint(Theme.accent)
+                .frame(width: 430, height: 490)
+            #endif
         }
+        #if os(macOS)
+        .windowResizability(.contentSize)
+        #endif
     }
 }

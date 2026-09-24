@@ -26,6 +26,7 @@ final class AudioRecorder: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        #if os(iOS)
         NotificationCenter.default.addObserver(
             self, selector: #selector(routeChanged),
             name: AVAudioSession.routeChangeNotification, object: nil
@@ -34,14 +35,23 @@ final class AudioRecorder: NSObject, ObservableObject {
             self, selector: #selector(handleInterruption),
             name: AVAudioSession.interruptionNotification, object: nil
         )
+        #endif
     }
 
     func requestPermission() async -> Bool {
-        await withCheckedContinuation { cont in
+        #if os(iOS)
+        return await withCheckedContinuation { cont in
             AVAudioApplication.requestRecordPermission { granted in
                 cont.resume(returning: granted)
             }
         }
+        #else
+        return await withCheckedContinuation { cont in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                cont.resume(returning: granted)
+            }
+        }
+        #endif
     }
 
     /// Prefers an external input (USB-C wired mic, or a wireless receiver like a
@@ -51,14 +61,21 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// like Settings that call this on every appearance (to refresh the mic
     /// list) shouldn't be able to re-activate/re-route the session out from
     /// under an active recording just by being visible.
+    ///
+    /// macOS has no `AVAudioSession` — recording there just uses whatever
+    /// input is selected in System Settings → Sound (v1 scope; no auto-
+    /// preferring or device enumeration on Mac yet).
     func configureSessionPreferringExternalMic() {
+        #if os(iOS)
         guard !isRecording else { return }
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try? session.setActive(true)
         refreshPreferredInput()
+        #endif
     }
 
+    #if os(iOS)
     /// Re-derives the current input, preferring an external mic. Deliberately
     /// doesn't touch session category/activation — safe to call from a route
     /// change notification, which can fire mid-transition (e.g. right as a
@@ -119,11 +136,13 @@ final class AudioRecorder: NSObject, ObservableObject {
             self.pause()
         }
     }
+    #endif
 
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
 
+    #if os(iOS)
     func availableInputs() -> [AVAudioSessionPortDescription] {
         AVAudioSession.sharedInstance().availableInputs ?? []
     }
@@ -132,6 +151,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         try? AVAudioSession.sharedInstance().setPreferredInput(port)
         currentInputName = port.portName
     }
+    #endif
 
     /// Marks the current moment as a flag. Only meaningful while actively
     /// recording (not paused) — the elapsed clock is frozen while paused, so
@@ -186,10 +206,12 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 
     func resume() {
+        #if os(iOS)
         // An interruption (or backgrounding) can deactivate the session out
         // from under us; re-activate explicitly rather than assuming
         // `record()` alone will do it.
         try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
         recorder?.record()
         isPaused = false
         startDate = Date()
@@ -202,7 +224,9 @@ final class AudioRecorder: NSObject, ObservableObject {
             accumulated += Date().timeIntervalSince(startDate ?? Date())
         }
         recorder?.stop()
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
         isRecording = false
         isPaused = false
         stopTimer()
@@ -217,7 +241,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// the Record screen's cancel button.
     func cancel() {
         recorder?.stop()
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
         if let outputURL {
             try? FileManager.default.removeItem(at: outputURL)
         }

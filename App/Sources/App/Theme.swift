@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 // Bits color palette (~/Projects/bits/public/app.css), ported to SwiftUI.
 enum Theme {
@@ -14,14 +19,21 @@ enum Theme {
 
 extension Color {
     init(light: UInt32, dark: UInt32) {
+        func rgb(_ hex: UInt32) -> (CGFloat, CGFloat, CGFloat) {
+            (CGFloat((hex >> 16) & 0xFF) / 255, CGFloat((hex >> 8) & 0xFF) / 255, CGFloat(hex & 0xFF) / 255)
+        }
+        #if os(iOS)
         self.init(UIColor { trait in
             let hex = trait.userInterfaceStyle == .dark ? dark : light
-            return UIColor(
-                red: CGFloat((hex >> 16) & 0xFF) / 255,
-                green: CGFloat((hex >> 8) & 0xFF) / 255,
-                blue: CGFloat(hex & 0xFF) / 255,
-                alpha: 1
-            )
+            let (r, g, b) = rgb(hex)
+            return UIColor(red: r, green: g, blue: b, alpha: 1)
         })
+        #else
+        self.init(NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let (r, g, b) = rgb(isDark ? dark : light)
+            return NSColor(red: r, green: g, blue: b, alpha: 1)
+        })
+        #endif
     }
 }

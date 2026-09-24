@@ -85,6 +85,7 @@ final class BackupManager: ObservableObject {
     }
 }
 
+#if os(iOS)
 /// Presents the system document picker in folder-selection mode.
 struct FolderPicker: UIViewControllerRepresentable {
     var onPick: (URL) -> Void
@@ -108,3 +109,4 @@ struct FolderPicker: UIViewControllerRepresentable {
         }
     }
 }
+#endif
