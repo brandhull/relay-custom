@@ -27,18 +27,22 @@ struct RelayApp: App {
                 .preferredColorScheme(nil)
                 .tint(Theme.accent)
             #else
-            // Phase 1 (Mac port): RootTabView's other tabs (Library,
-            // Settings) aren't ported yet — this window shows Record only,
-            // sized like a small fixed utility window ("like Calculator"),
-            // not a resizable/fullscreen-capable app window.
-            RecordView()
-                .environmentObject(store)
-                .environmentObject(settings)
-                .environmentObject(backupManager)
-                .environmentObject(recorder)
-                .preferredColorScheme(nil)
-                .tint(Theme.accent)
-                .frame(width: 430, height: 490)
+            // Phase 2 (Mac port): Settings isn't ported yet (Phase 3) —
+            // Record + Library only, sized like a small fixed utility
+            // window ("like Calculator"), not a resizable/fullscreen app.
+            TabView {
+                RecordView()
+                    .tabItem { Label("Record", systemImage: "water.waves") }
+                LibraryView()
+                    .tabItem { Label("Library", systemImage: "waveform") }
+            }
+            .environmentObject(store)
+            .environmentObject(settings)
+            .environmentObject(backupManager)
+            .environmentObject(recorder)
+            .preferredColorScheme(nil)
+            .tint(Theme.accent)
+            .frame(width: 430, height: 520)
             #endif
         }
         #if os(macOS)

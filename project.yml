@@ -62,6 +62,11 @@ targets:
     sources:
       - path: App/Sources/App/RelayApp.swift
       - path: App/Sources/App/RecordView.swift
+      - path: App/Sources/App/LibraryView.swift
+      - path: App/Sources/App/EditRecordingView.swift
+      - path: App/Sources/App/WaveformView.swift
+      - path: App/Sources/App/Buttons.swift
+      - path: App/Sources/App/AudioPlayer.swift
       - path: App/Sources/App/Theme.swift
       - path: App/Sources/App/Models.swift
       - path: App/Sources/App/RecordingStore.swift

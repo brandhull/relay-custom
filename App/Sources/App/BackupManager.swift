@@ -1,5 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 /// Lets the user pick any folder (typically one inside iCloud Drive) as a
 /// backup destination, and copies each new recording there. Uses the
@@ -15,6 +18,25 @@ final class BackupManager: ObservableObject {
     init() {
         folderName = resolveFolderURL()?.lastPathComponent
     }
+
+    #if os(macOS)
+    /// Prompts for a folder via NSOpenPanel only if none is set yet — used
+    /// so the Edit screen's iCloud quick action works standalone on Mac
+    /// without needing a full Settings screen ported first (Phase 3).
+    /// Returns whether a folder is now set (already-set counts as success).
+    @discardableResult
+    func chooseFolderIfNeeded() -> Bool {
+        if folderName != nil { return true }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        setFolder(url)
+        return true
+    }
+    #endif
 
     func setFolder(_ url: URL) {
         guard url.startAccessingSecurityScopedResource() else { return }

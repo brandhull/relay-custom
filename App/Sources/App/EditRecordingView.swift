@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 struct EditRecordingView: View {
     @EnvironmentObject var store: RecordingStore
@@ -42,14 +45,18 @@ struct EditRecordingView: View {
                 .background(Theme.bg)
         }
         .navigationTitle("Edit")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        #endif
         .onAppear {
             if !recording.audioRemovedLocally { player.load(url: recording.fileURL) }
         }
+        #if os(iOS)
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [recording.fileURL])
         }
+        #endif
         .confirmationDialog(
             "Delete this recording?",
             isPresented: $showDeleteConfirm,
@@ -171,6 +178,7 @@ struct EditRecordingView: View {
                         .disabled(isSaving || (trimStart == 0 && trimEnd == 1))
                         quickActionButton("folder", "iCloud") { await saveToICloud() }
                     }
+                    #if os(iOS)
                     HStack(spacing: 12) {
                         quickActionButton("table", "Baserow") { await pushToBaserow() }
                         quickActionButton("doc.text", "Transcribe") { await transcribeToCraft() }
@@ -183,6 +191,7 @@ struct EditRecordingView: View {
                         .font(.caption)
                         .foregroundStyle(Theme.muted)
                     }
+                    #endif
                 }
 
                 if let statusMessage {
@@ -218,19 +227,28 @@ struct EditRecordingView: View {
         VStack(spacing: 14) {
             if !recording.audioRemovedLocally {
                 Button {
+                    #if os(iOS)
                     showShareSheet = true
+                    #else
+                    presentMacShareSheet()
+                    #endif
                 } label: {
                     Label("Share Recording", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.tintedAction)
             }
 
+            #if os(iOS)
+            // Continue to Episode Details (Transistor publish) is Phase 3
+            // scope — EpisodeDetailsView/PublishView/TransistorAPI aren't
+            // in the Mac target's source list yet.
             NavigationLink {
                 EpisodeDetailsView(recording: $recording)
             } label: {
                 Text("Continue to Episode Details")
             }
             .buttonStyle(.primaryAction)
+            #endif
 
             Button(role: .destructive) {
                 showDeleteConfirm = true
@@ -313,6 +331,9 @@ struct EditRecordingView: View {
     private func saveToICloud() async {
         errorMessage = nil
         statusMessage = nil
+        #if os(macOS)
+        backupManager.chooseFolderIfNeeded()
+        #endif
         guard let folderName = backupManager.folderName else {
             errorMessage = "Choose a backup folder in Settings first."
             return
@@ -328,6 +349,15 @@ struct EditRecordingView: View {
         }
     }
 
+    #if os(macOS)
+    private func presentMacShareSheet() {
+        let picker = NSSharingServicePicker(items: [recording.fileURL])
+        guard let window = NSApp.keyWindow, let contentView = window.contentView else { return }
+        picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+    }
+    #endif
+
+    #if os(iOS)
     private func pushToBaserow() async {
         errorMessage = nil
         statusMessage = nil
@@ -375,6 +405,7 @@ struct EditRecordingView: View {
             errorMessage = error.localizedDescription
         }
     }
+    #endif
 
     private func deleteRecording() {
         store.delete(recording)

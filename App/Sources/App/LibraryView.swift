@@ -52,7 +52,13 @@ struct LibraryView: View {
 private struct RecordingRow: View {
     let recording: Recording
 
-    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var isPad: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        false
+        #endif
+    }
 
     /// Which destinations this recording has actually been sent to — only
     /// non-empty entries render as badges, so a recording that's never left

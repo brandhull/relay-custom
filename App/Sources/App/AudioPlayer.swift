@@ -24,8 +24,10 @@ final class AudioPlayer: NSObject, ObservableObject {
             isPlaying = false
             stopTimer()
         } else {
+            #if os(iOS)
             try? AVAudioSession.sharedInstance().setCategory(.playback)
             try? AVAudioSession.sharedInstance().setActive(true)
+            #endif
             player.play()
             isPlaying = true
             startTimer()

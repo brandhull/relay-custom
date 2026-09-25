@@ -168,13 +168,10 @@ struct RecordView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Theme.bg, for: .navigationBar)
-            // EditRecordingView isn't part of Relay-Mac's Phase 1 source
-            // list yet (Phase 2 scope) — on Mac, a finished recording just
-            // saves to the store without auto-navigating anywhere yet.
+            #endif
             .navigationDestination(item: $justRecorded) { recording in
                 EditRecordingView(recording: recording)
             }
-            #endif
             .confirmationDialog(
                 "Discard this recording?",
                 isPresented: $showCancelConfirm,
