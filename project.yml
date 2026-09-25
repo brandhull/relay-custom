@@ -70,6 +70,7 @@ targets:
       - path: App/Sources/App/BackupManager.swift
       - path: App/Sources/App/AudioRecorder.swift
       - path: App/Sources/App/AudioInputDevice.swift
+      - path: App/Sources/App/MacRecordingWriter.swift
       - path: App/Sources/App/CraftAPI.swift # only for the CraftFolder type AppSettings references
       - path: App/Resources
         buildPhase: resources
@@ -84,6 +85,12 @@ targets:
         # Same shared identifier as the iOS target — see its entitlements
         # comment for why this can't just be the default.
         com.apple.developer.ubiquity-kvstore-identifier: D53LTKT473.com.brandonhull.relay.shared
+        # Required for microphone access under Hardened Runtime (separate
+        # from Info.plist's NSMicrophoneUsageDescription, which alone isn't
+        # sufficient once hardened runtime is on) — without this, CoreAudio
+        # silently hands back correctly-shaped but all-zero buffers instead
+        # of throwing an error or even showing the permission prompt.
+        com.apple.security.device.audio-input: true
     settings:
       PRODUCT_NAME: Relay
       PRODUCT_BUNDLE_IDENTIFIER: com.brandonhull.relay.mac

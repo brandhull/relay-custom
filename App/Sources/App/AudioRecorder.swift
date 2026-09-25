@@ -1,6 +1,10 @@
 import Foundation
 import AVFoundation
 import Combine
+#if os(macOS)
+import AudioToolbox
+import CoreAudio
+#endif
 
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject {
@@ -31,14 +35,14 @@ final class AudioRecorder: NSObject, ObservableObject {
     @Published var selectedInputDeviceUID: String? {
         didSet { UserDefaults.standard.set(selectedInputDeviceUID, forKey: "macSelectedInputDeviceUID") }
     }
-    private var engine: AVAudioEngine?
-    private var audioFile: AVAudioFile?
-    /// The tap fires on a real-time audio thread, not the main actor —
-    /// gating the (synchronous, in-order) buffer write on this plain flag
-    /// avoids hopping to the main actor per-buffer, which risks writes
-    /// landing out of order under load. Mirrors `isPaused` whenever it
-    /// changes; only this flag is read by the tap itself.
-    nonisolated(unsafe) private var captureIsPaused = false
+    /// Raw CoreAudio IOProc, not AVAudioEngine — see MacRecordingWriter's
+    /// doc comment for why (AVAudioEngine.inputNode redirected to a
+    /// runtime-picked device silently produced empty/near-silent
+    /// recordings here, a known rough edge with a matching writeup in the
+    /// Maverick app's own MeetingRecorder.swift).
+    private var ioProcID: AudioDeviceIOProcID?
+    private var activeDeviceID: AudioDeviceID?
+    private var writer: MacRecordingWriter?
     #endif
 
     override init() {
@@ -254,88 +258,90 @@ final class AudioRecorder: NSObject, ObservableObject {
     }
 
     #if os(macOS)
-    /// Records via AVAudioEngine, bound to the picked device when one is
-    /// set — scoped to this app's own audio unit, unlike overwriting the
-    /// system's default input (which would affect every other app until
-    /// changed back). Falls back to the system default when no device is
-    /// picked. The output format matches the input node's own native
-    /// format/channel count rather than a hardcoded 44.1kHz mono — a
-    /// mismatch against a device's real format (e.g. a virtual device
-    /// running at 48kHz) was a likely second contributor to a silent
-    /// recording alongside picking the wrong device outright.
+    /// Records via a raw CoreAudio IOProc bound directly to the picked
+    /// device (or the system default), not AVAudioEngine — see this
+    /// property section's doc comment for why. The actual PCM format is
+    /// derived from the device's own first real callback (in
+    /// `MacRecordingWriter`), not assumed ahead of time from a node's
+    /// cached format, which is the specific thing that was unreliable.
     private func startEngineRecording(to url: URL) throws {
-        let engine = AVAudioEngine()
-        let inputNode = engine.inputNode
-
+        let deviceID: AudioDeviceID
         if let uid = selectedInputDeviceUID,
-           let device = AudioInputDeviceLister.availableInputDevices().first(where: { $0.uid == uid }),
-           let audioUnit = inputNode.audioUnit {
-            var deviceID = device.id
-            let status = AudioUnitSetProperty(
-                audioUnit,
-                kAudioOutputUnitProperty_CurrentDevice,
-                kAudioUnitScope_Global,
-                0,
-                &deviceID,
-                UInt32(MemoryLayout<AudioDeviceID>.size)
-            )
-            if status != noErr {
-                print("Failed to select input device (status \(status)); falling back to system default")
-            }
+           let device = AudioInputDeviceLister.availableInputDevices().first(where: { $0.uid == uid }) {
+            deviceID = device.id
+        } else {
+            deviceID = try Self.defaultInputDeviceID()
         }
 
-        let inputFormat = inputNode.inputFormat(forBus: 0)
-        let outputSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: inputFormat.sampleRate,
-            AVNumberOfChannelsKey: min(inputFormat.channelCount, 2),
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        let file = try AVAudioFile(forWriting: url, settings: outputSettings)
+        let sampleRate = Self.nominalSampleRate(of: deviceID) ?? 48000
+        let writer = MacRecordingWriter(fileURL: url, sampleRate: sampleRate)
 
-        captureIsPaused = false
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-            guard let self, !self.captureIsPaused else { return }
-            // Write happens synchronously, in-order, on this same real-time
-            // thread every time — no actor hop here, since hopping per
-            // buffer risks writes landing out of order under load. The
-            // meter level is purely cosmetic, so it's fine to hop for that.
-            try? file.write(from: buffer)
-            let level = Self.rmsLevel(from: buffer)
-            Task { @MainActor in
-                self.meterLevel = level
-            }
+        var newIOProcID: AudioDeviceIOProcID?
+        let createStatus = AudioDeviceCreateIOProcIDWithBlock(&newIOProcID, deviceID, nil) { _, inInputData, _, _, _ in
+            writer.consume(inInputData)
+        }
+        guard createStatus == noErr, let newIOProcID else {
+            throw NSError(domain: "AudioRecorder", code: Int(createStatus), userInfo: [NSLocalizedDescriptionKey: "Couldn't create audio tap (status \(createStatus))"])
         }
 
-        try engine.start()
+        let startStatus = AudioDeviceStart(deviceID, newIOProcID)
+        guard startStatus == noErr else {
+            AudioDeviceDestroyIOProcID(deviceID, newIOProcID)
+            throw NSError(domain: "AudioRecorder", code: Int(startStatus), userInfo: [NSLocalizedDescriptionKey: "Couldn't start recording device (status \(startStatus))"])
+        }
 
-        self.engine = engine
-        self.audioFile = file
-    }
-
-    private nonisolated static func rmsLevel(from buffer: AVAudioPCMBuffer) -> Float {
-        guard let channelData = buffer.floatChannelData else { return 0 }
-        let frameCount = Int(buffer.frameLength)
-        guard frameCount > 0 else { return 0 }
-        let samples = channelData[0]
-        var sum: Float = 0
-        for i in 0..<frameCount { sum += samples[i] * samples[i] }
-        let rms = sqrt(sum / Float(frameCount))
-        return min(max(rms * 4, 0), 1)
+        self.ioProcID = newIOProcID
+        self.activeDeviceID = deviceID
+        self.writer = writer
     }
 
     private func stopEngineRecording() {
-        engine?.inputNode.removeTap(onBus: 0)
-        engine?.stop()
-        engine = nil
-        audioFile = nil
+        if let ioProcID, let activeDeviceID {
+            AudioDeviceStop(activeDeviceID, ioProcID)
+            AudioDeviceDestroyIOProcID(activeDeviceID, ioProcID)
+        }
+        ioProcID = nil
+        activeDeviceID = nil
+        writer = nil
+    }
+
+    private static func defaultInputDeviceID() throws -> AudioDeviceID {
+        var deviceID = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID)
+        guard status == noErr else {
+            throw NSError(domain: "AudioRecorder", code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Couldn't find the default input device"])
+        }
+        return deviceID
+    }
+
+    private static func nominalSampleRate(of deviceID: AudioDeviceID) -> Double? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var sampleRate: Double = 0
+        var size = UInt32(MemoryLayout<Double>.size)
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &sampleRate)
+        return status == noErr ? sampleRate : nil
     }
     #endif
 
     func pause() {
         recorder?.pause()
         #if os(macOS)
-        captureIsPaused = true
+        // Stops the IOProc without destroying it or closing the file —
+        // resuming just restarts the same IOProc, appending to the same
+        // still-open file (no silence gap, no new file).
+        if let ioProcID, let activeDeviceID {
+            AudioDeviceStop(activeDeviceID, ioProcID)
+        }
         #endif
         isPaused = true
         accumulated += Date().timeIntervalSince(startDate ?? Date())
@@ -350,7 +356,9 @@ final class AudioRecorder: NSObject, ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
         #if os(macOS)
-        captureIsPaused = false
+        if let ioProcID, let activeDeviceID {
+            AudioDeviceStart(activeDeviceID, ioProcID)
+        }
         #endif
         recorder?.record()
         isPaused = false
@@ -414,6 +422,11 @@ final class AudioRecorder: NSObject, ObservableObject {
                     let normalized = pow(10, power / 20)
                     self.meterLevel = min(max(normalized, 0), 1)
                 }
+                #if os(macOS)
+                if let writer = self.writer {
+                    self.meterLevel = writer.currentLevel
+                }
+                #endif
             }
         }
     }
