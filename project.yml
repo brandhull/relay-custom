@@ -61,6 +61,7 @@ targets:
     # porting everything at once.
     sources:
       - path: App/Sources/App/RelayApp.swift
+      - path: App/Sources/App/AppearanceSwitcher.swift
       - path: App/Sources/App/RecordView.swift
       - path: App/Sources/App/LibraryView.swift
       - path: App/Sources/App/EditRecordingView.swift

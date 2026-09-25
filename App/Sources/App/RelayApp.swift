@@ -15,6 +15,9 @@ struct RelayApp: App {
     @StateObject private var settings = AppSettings()
     @StateObject private var backupManager = BackupManager()
     @StateObject private var recorder = AudioRecorder.shared
+    #if os(macOS)
+    @AppStorage("macAppearanceMode") private var appearanceMode: AppearanceMode = .system
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -40,9 +43,14 @@ struct RelayApp: App {
             .environmentObject(settings)
             .environmentObject(backupManager)
             .environmentObject(recorder)
-            .preferredColorScheme(nil)
+            .preferredColorScheme(appearanceMode.colorScheme)
             .tint(Theme.accent)
             .frame(width: 430, height: 520)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    AppearanceSwitcher()
+                }
+            }
             #endif
         }
         #if os(macOS)
