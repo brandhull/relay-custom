@@ -73,19 +73,24 @@ struct SettingsView: View {
                         .textContentType(.none)
                         #endif
                         .focused($focusedField, equals: .transistorKey)
-                    Button {
-                        Task { await refreshShows() }
-                    } label: {
-                        HStack {
-                            Text("Load Shows")
-                            if isLoadingShows { Spacer(); ProgressView() }
+                    HStack {
+                        Button {
+                            Task { await refreshShows() }
+                        } label: {
+                            HStack {
+                                Text("Load Shows")
+                                if isLoadingShows { ProgressView() }
+                            }
                         }
-                    }
-                    .disabled(settings.transistorAPIKey.isEmpty)
-                    if !settings.cachedShows.isEmpty {
-                        Text("\(settings.cachedShows.count) show(s) loaded")
-                            .font(.caption)
-                            .foregroundStyle(Theme.muted)
+                        .disabled(settings.transistorAPIKey.isEmpty)
+                        if !settings.cachedShows.isEmpty {
+                            Spacer()
+                            Text(settings.cachedShows.map(\.title).joined(separator: ", "))
+                                .font(.caption)
+                                .foregroundStyle(Theme.muted)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                     if let showsError {
                         Text(showsError).font(.caption).foregroundStyle(Theme.danger)

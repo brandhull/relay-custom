@@ -138,6 +138,7 @@ struct EditRecordingView: View {
                                 .foregroundStyle(previousFlag(before: player.currentTime) == nil ? Theme.muted.opacity(0.4) : Theme.accent)
                         }
                         .disabled(previousFlag(before: player.currentTime) == nil)
+                        .buttonStyle(.plain)
                     }
                     Button {
                         player.togglePlay()
@@ -146,6 +147,8 @@ struct EditRecordingView: View {
                             .font(.system(size: 38))
                             .foregroundStyle(Theme.muted)
                     }
+                    .buttonStyle(.plain)
+                    .offset(y: -3)
                     if !recording.flags.isEmpty {
                         Button {
                             jumpToFlag(after: player.currentTime)
@@ -155,6 +158,7 @@ struct EditRecordingView: View {
                                 .foregroundStyle(nextFlag(after: player.currentTime) == nil ? Theme.muted.opacity(0.4) : Theme.accent)
                         }
                         .disabled(nextFlag(after: player.currentTime) == nil)
+                        .buttonStyle(.plain)
                     }
                     Spacer()
                 }

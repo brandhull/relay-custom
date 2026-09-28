@@ -19,10 +19,14 @@ struct RelayApp: App {
     @AppStorage("macAppearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("macPinOnTop") private var pinOnTop: Bool = false
     @State private var macTab: MacTab = .record
-    // +100pt over the original 520, per Brandon: the top bar had almost no
-    // breathing room above/below the pill and icons — growing the window
-    // gives padding.top/.bottom room to work with instead of squeezing them.
-    private static let windowHeight: CGFloat = 620
+    // 620 gave the top bar breathing room, but EditRecordingView's content
+    // (waveform, quick actions, footer, plus a status/error line once one
+    // of the quick actions runs) measured at ~672pt of real content —
+    // taller than the 620 budget by just enough to force a scroll for the
+    // last sliver (the bottom of Delete Recording), which is exactly the
+    // "I don't want to have to scroll" case Brandon flagged. 720 gives
+    // clear headroom above that measured worst case.
+    private static let windowHeight: CGFloat = 720
     private static let topBarHeight: CGFloat = 56
     #endif
 
