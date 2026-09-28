@@ -27,6 +27,14 @@ final class BackupManager: ObservableObject {
     @discardableResult
     func chooseFolderIfNeeded() -> Bool {
         if folderName != nil { return true }
+        return pickFolder()
+    }
+
+    /// Always prompts via NSOpenPanel, even if a folder is already set — for
+    /// Settings' "Choose Folder…" button, where the point is explicitly to
+    /// change it (chooseFolderIfNeeded is a no-op once a folder exists).
+    @discardableResult
+    func pickFolder() -> Bool {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

@@ -6,7 +6,7 @@ import FoundationModels
 /// `isAvailable()` (or catch the thrown error) and fall back to the raw
 /// transcript when it's false, since not every device this app could run
 /// on supports it.
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 enum SummarizationService {
     static func isAvailable() -> Bool {
         switch SystemLanguageModel.default.availability {

@@ -178,7 +178,6 @@ struct EditRecordingView: View {
                         .disabled(isSaving || (trimStart == 0 && trimEnd == 1))
                         quickActionButton("folder", "iCloud") { await saveToICloud() }
                     }
-                    #if os(iOS)
                     HStack(spacing: 12) {
                         quickActionButton("table", "Baserow") { await pushToBaserow() }
                         quickActionButton("doc.text", "Transcribe") { await transcribeToCraft() }
@@ -191,7 +190,6 @@ struct EditRecordingView: View {
                         .font(.caption)
                         .foregroundStyle(Theme.muted)
                     }
-                    #endif
                 }
 
                 if let statusMessage {
@@ -238,17 +236,12 @@ struct EditRecordingView: View {
                 .buttonStyle(.tintedAction)
             }
 
-            #if os(iOS)
-            // Continue to Episode Details (Transistor publish) is Phase 3
-            // scope — EpisodeDetailsView/PublishView/TransistorAPI aren't
-            // in the Mac target's source list yet.
             NavigationLink {
                 EpisodeDetailsView(recording: $recording)
             } label: {
                 Text("Continue to Episode Details")
             }
             .buttonStyle(.primaryAction)
-            #endif
 
             Button(role: .destructive) {
                 showDeleteConfirm = true
@@ -357,7 +350,6 @@ struct EditRecordingView: View {
     }
     #endif
 
-    #if os(iOS)
     private func pushToBaserow() async {
         errorMessage = nil
         statusMessage = nil
@@ -405,7 +397,6 @@ struct EditRecordingView: View {
             errorMessage = error.localizedDescription
         }
     }
-    #endif
 
     private func deleteRecording() {
         store.delete(recording)

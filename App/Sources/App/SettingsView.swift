@@ -19,13 +19,59 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        // Plain Form on macOS, not wrapped in NavigationStack — Settings has
+        // no NavigationLink pushes of its own to justify one. formContent
+        // wraps the Form in its own ScrollView on macOS (see below) because
+        // Form's own internal scrolling didn't engage once it was given a
+        // fixed height from RelayApp's tab-switching container — it just
+        // rendered a fixed, non-scrollable middle slice of its content
+        // instead (confirmed with real, non-simulated scroll input, not
+        // just accessibility actions).
+        #if os(iOS)
         NavigationStack {
-            Form {
+            formContent
+        }
+        .onAppear { recorder.configureSessionPreferringExternalMic() }
+        .sheet(isPresented: $showFolderPicker) {
+            FolderPicker { url in
+                backupManager.setFolder(url)
+            }
+        }
+        #else
+        formContent
+            .onAppear { recorder.configureSessionPreferringExternalMic() }
+        #endif
+    }
+
+    private var formContent: some View {
+        #if os(macOS)
+        // A definite width (not just maxWidth: .infinity) is load-bearing —
+        // Section footer/header Text never wrapped and just ran off the
+        // window edge otherwise. Form's own row layout on macOS doesn't
+        // propose a bounded width to its children the way iOS's grouped
+        // Form does, so long footer strings had nothing to wrap against
+        // until given one explicitly here.
+        ScrollView {
+            settingsForm
+                .frame(width: 400)
+                .padding(.vertical, 8)
+        }
+        #else
+        settingsForm
+        #endif
+    }
+
+    private var settingsForm: some View {
+        Form {
                 Section {
                     SecureField("Transistor API Key", text: $settings.transistorAPIKey)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
+                        #endif
                         .autocorrectionDisabled()
+                        #if os(iOS)
                         .textContentType(.none)
+                        #endif
                         .focused($focusedField, equals: .transistorKey)
                     Button {
                         Task { await refreshShows() }
@@ -52,13 +98,19 @@ struct SettingsView: View {
 
                 Section {
                     TextField("Baserow Token", text: $settings.baserowToken)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
+                        #endif
                         .autocorrectionDisabled()
+                        #if os(iOS)
                         .textContentType(.none)
+                        #endif
                         .focused($focusedField, equals: .baserowToken)
                     TextField("Baserow Table ID", text: $settings.baserowTableId)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
                         .textContentType(.none)
+                        #endif
                         .focused($focusedField, equals: .baserowTableId)
                     Toggle("Auto-sync episodes to Baserow", isOn: $settings.autoSyncBaserow)
                 } header: {
@@ -100,7 +152,13 @@ struct SettingsView: View {
                         Text(backupManager.folderName ?? "Not Set")
                             .foregroundStyle(Theme.muted)
                     }
-                    Button("Choose Folder…") { showFolderPicker = true }
+                    Button("Choose Folder…") {
+                        #if os(iOS)
+                        showFolderPicker = true
+                        #else
+                        backupManager.pickFolder()
+                        #endif
+                    }
                     if backupManager.folderName != nil {
                         Button("Remove Folder", role: .destructive) { backupManager.clearFolder() }
                     }
@@ -112,10 +170,14 @@ struct SettingsView: View {
 
                 Section {
                     TextField("Craft API URL", text: $settings.craftAPIURL)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
+                        #endif
                         .autocorrectionDisabled()
+                        #if os(iOS)
                         .keyboardType(.URL)
                         .textContentType(.none)
+                        #endif
                         .focused($focusedField, equals: .craftURL)
                     Button {
                         Task { await refreshCraftFolders() }
@@ -164,6 +226,7 @@ struct SettingsView: View {
                         Text(recorder.currentInputName)
                             .foregroundStyle(Theme.muted)
                     }
+                    #if os(iOS)
                     ForEach(recorder.availableInputs(), id: \.uid) { input in
                         Button {
                             recorder.selectInput(input)
@@ -181,29 +244,47 @@ struct SettingsView: View {
                     Text("Relay prefers a connected USB-C mic or wireless receiver over the built-in microphone automatically.")
                         .font(.caption)
                         .foregroundStyle(Theme.muted)
+                    #else
+                    Button("System Default") {
+                        recorder.selectedInputDeviceUID = nil
+                        recorder.refreshCurrentInputName()
+                    }
+                    ForEach(AudioInputDeviceLister.availableInputDevices()) { device in
+                        Button {
+                            recorder.selectedInputDeviceUID = device.uid
+                            recorder.refreshCurrentInputName()
+                        } label: {
+                            HStack {
+                                Text(device.name).foregroundStyle(Theme.fg)
+                                Spacer()
+                                if device.uid == recorder.selectedInputDeviceUID {
+                                    Image(systemName: "checkmark").foregroundStyle(Theme.accent)
+                                }
+                            }
+                        }
+                    }
+                    #endif
                 }
 
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.bg)
-            .navigationTitle("Settings")
-            .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focusedField = nil }
-                }
+        #if os(macOS)
+        .formStyle(.grouped)
+        #endif
+        .scrollContentBackground(.hidden)
+        .background(Theme.bg)
+        #if os(iOS)
+        .navigationTitle("Settings")
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = nil }
             }
         }
-        .onAppear { recorder.configureSessionPreferringExternalMic() }
-        .sheet(isPresented: $showFolderPicker) {
-            FolderPicker { url in
-                backupManager.setFolder(url)
-            }
-        }
+        #endif
     }
 
     private var storageSizeString: String {

@@ -62,6 +62,7 @@ targets:
     sources:
       - path: App/Sources/App/RelayApp.swift
       - path: App/Sources/App/AppearanceSwitcher.swift
+      - path: App/Sources/App/PinOnTop.swift
       - path: App/Sources/App/RecordView.swift
       - path: App/Sources/App/LibraryView.swift
       - path: App/Sources/App/EditRecordingView.swift
@@ -77,7 +78,17 @@ targets:
       - path: App/Sources/App/AudioRecorder.swift
       - path: App/Sources/App/AudioInputDevice.swift
       - path: App/Sources/App/MacRecordingWriter.swift
-      - path: App/Sources/App/CraftAPI.swift # only for the CraftFolder type AppSettings references
+      - path: App/Sources/App/CraftAPI.swift
+      - path: App/Sources/App/CraftPublisher.swift
+      - path: App/Sources/App/BaserowAPI.swift
+      - path: App/Sources/App/BaserowSyncCoordinator.swift
+      - path: App/Sources/App/TransistorAPI.swift
+      - path: App/Sources/App/TranscriptionService.swift
+      - path: App/Sources/App/AppleSpeechAnalyzerService.swift
+      - path: App/Sources/App/SummarizationService.swift
+      - path: App/Sources/App/PublishView.swift
+      - path: App/Sources/App/SettingsView.swift
+      - path: App/Sources/App/EpisodeDetailsView.swift
       - path: App/Resources
         buildPhase: resources
     info:
@@ -85,6 +96,7 @@ targets:
       properties:
         LSMinimumSystemVersion: "14.0"
         NSMicrophoneUsageDescription: "Relay needs microphone access to record podcast episodes."
+        NSSpeechRecognitionUsageDescription: "Relay uses on-device speech recognition to transcribe your recordings before sending them to Craft."
     entitlements:
       path: App/Relay-Mac.entitlements
       properties:

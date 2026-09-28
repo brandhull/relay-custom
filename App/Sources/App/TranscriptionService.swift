@@ -40,7 +40,7 @@ enum TranscriptionService {
     /// one call with no manual chunking. Falls back to the chunked
     /// `SFSpeechRecognizer` path below for iOS 17–25.
     static func transcribe(fileURL: URL, onProgress: ((String) -> Void)? = nil) async throws -> String {
-        if #available(iOS 26.0, *), await AppleSpeechAnalyzerService.isAvailable() {
+        if #available(iOS 26.0, macOS 26.0, *), await AppleSpeechAnalyzerService.isAvailable() {
             return try await AppleSpeechAnalyzerService.transcribe(fileURL: fileURL, onProgress: onProgress)
         }
 

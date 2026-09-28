@@ -9,7 +9,7 @@ import AVFoundation
 /// has a direct file-based entry point designed for exactly this use case,
 /// so the whole recording goes through in one call with no manual chunking
 /// and no chunk-boundary risk.
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 enum AppleSpeechAnalyzerService {
     private static let locale = Locale(identifier: "en-US")
 

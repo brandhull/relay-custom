@@ -22,5 +22,7 @@
 	<string>14.0</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Relay needs microphone access to record podcast episodes.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Relay uses on-device speech recognition to transcribe your recordings before sending them to Craft.</string>
 </dict>
 </plist>

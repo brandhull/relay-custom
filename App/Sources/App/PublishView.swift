@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 struct PublishView: View {
     @EnvironmentObject var store: RecordingStore
@@ -20,11 +23,21 @@ struct PublishView: View {
         }
         .background(Theme.bg)
         .navigationTitle("Publish")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [recording.fileURL, shareSummary()])
         }
+        #endif
     }
+
+    #if os(macOS)
+    private func presentMacShareSheet() {
+        let picker = NSSharingServicePicker(items: [recording.fileURL, shareSummary()])
+        guard let window = NSApp.keyWindow, let contentView = window.contentView else { return }
+        picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+    }
+    #endif
 
     private var form: some View {
         Form {
@@ -81,7 +94,11 @@ struct PublishView: View {
             .disabled(isWorking || !settings.hasTransistorKey)
 
             Button {
+                #if os(iOS)
                 showShareSheet = true
+                #else
+                presentMacShareSheet()
+                #endif
             } label: {
                 Label("Share Episode", systemImage: "square.and.arrow.up")
             }

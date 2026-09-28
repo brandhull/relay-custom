@@ -39,13 +39,13 @@ enum CraftPublisher {
         var content = transcript
         var label = "Transcript"
         if recording.duration > Double(settings.summarizeThresholdMinutes * 60) {
-            if #available(iOS 26.0, *), SummarizationService.isAvailable() {
+            if #available(iOS 26.0, macOS 26.0, *), SummarizationService.isAvailable() {
                 onProgress?("Summarizing…")
                 content = try await SummarizationService.summarize(transcript)
                 label = "Summary"
             }
         } else if settings.cleanupPunctuationEnabled {
-            if #available(iOS 26.0, *), SummarizationService.isAvailable() {
+            if #available(iOS 26.0, macOS 26.0, *), SummarizationService.isAvailable() {
                 onProgress?("Cleaning up punctuation…")
                 content = try await SummarizationService.cleanupPunctuation(transcript)
             }

@@ -22,7 +22,9 @@ struct EpisodeDetailsView: View {
         }
         .background(Theme.bg)
         .navigationTitle("Episode Details")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onChange(of: recording) { _, newValue in store.update(newValue) }
         .task {
             if settings.cachedShows.isEmpty { await loadShows() }
@@ -70,7 +72,9 @@ struct EpisodeDetailsView: View {
                     Text("Season")
                     Spacer()
                     TextField("Optional", text: $recording.episode.season)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #endif
                         .multilineTextAlignment(.trailing)
                         .foregroundStyle(Theme.muted)
                         .focused($isFieldFocused)
@@ -79,7 +83,9 @@ struct EpisodeDetailsView: View {
                     Text("Episode #")
                     Spacer()
                     TextField("Optional", text: $recording.episode.number)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #endif
                         .multilineTextAlignment(.trailing)
                         .foregroundStyle(Theme.muted)
                         .focused($isFieldFocused)

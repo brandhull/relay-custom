@@ -22,7 +22,7 @@ struct AppearanceSwitcher: View {
     @AppStorage("macAppearanceMode") private var mode: AppearanceMode = .system
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             button(.system, systemImage: "circle.lefthalf.filled")
             button(.light, systemImage: "sun.max")
             button(.dark, systemImage: "moon")
