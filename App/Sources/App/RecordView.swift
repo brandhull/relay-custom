@@ -33,9 +33,11 @@ struct RecordView: View {
                             .monospacedDigit()
                             .foregroundStyle(Theme.fg)
 
-                        Text(statusText)
+                        Text(recorder.resumeError ?? statusText)
                             .font(.subheadline)
-                            .foregroundStyle(Theme.muted)
+                            .foregroundStyle(recorder.resumeError == nil ? Theme.muted : Theme.danger)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
                     }
 
                     if recorder.isRecording {

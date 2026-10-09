@@ -14,6 +14,7 @@ enum Theme {
     static let accent = Color(light: 0x2563EB, dark: 0x5B9BFF)
     static let accentFg = Color(light: 0xFFFFFF, dark: 0x0D1420)
     static let border = Color(light: 0x000000, dark: 0xFFFFFF).opacity(0.08)
+    static let success = Color(light: 0x1E8E3E, dark: 0x34C759)
     static let danger = Color(light: 0xC0392B, dark: 0xE6604F)
 }
 

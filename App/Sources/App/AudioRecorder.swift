@@ -17,6 +17,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     @Published var elapsed: TimeInterval = 0
     @Published var currentInputName: String = "Built-in Microphone"
     @Published var meterLevel: Float = 0 // 0...1
+    /// Set when a resume fails (e.g. a call still holds the microphone); the
+    /// recording stays paused instead of pretending to record.
+    @Published var resumeError: String?
     /// Timestamps flagged during the recording in progress. Copied onto the
     /// `Recording` when it's created in `RecordView`, then cleared here for
     /// the next take.
@@ -344,6 +347,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         }
         #endif
         isPaused = true
+        resumeError = nil
         accumulated += Date().timeIntervalSince(startDate ?? Date())
         stopTimer()
     }
@@ -352,15 +356,27 @@ final class AudioRecorder: NSObject, ObservableObject {
         #if os(iOS)
         // An interruption (or backgrounding) can deactivate the session out
         // from under us; re-activate explicitly rather than assuming
-        // `record()` alone will do it.
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // `record()` alone will do it. If a call or another app still holds
+        // the microphone, either step fails — stay paused and say so rather
+        // than showing "Recording" while nothing is being captured.
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            resumeError = "Can't resume yet — the mic is in use. Try again."
+            return
+        }
+        guard recorder?.record() == true else {
+            resumeError = "Can't resume yet — the mic is in use. Try again."
+            return
+        }
         #endif
         #if os(macOS)
         if let ioProcID, let activeDeviceID {
             AudioDeviceStart(activeDeviceID, ioProcID)
         }
-        #endif
         recorder?.record()
+        #endif
+        resumeError = nil
         isPaused = false
         startDate = Date()
         startTimer()
@@ -380,6 +396,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         #endif
         isRecording = false
         isPaused = false
+        resumeError = nil
         stopTimer()
         let final = accumulated
         elapsed = 0
@@ -403,6 +420,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         }
         isRecording = false
         isPaused = false
+        resumeError = nil
         stopTimer()
         elapsed = 0
         accumulated = 0

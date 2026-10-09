@@ -36,6 +36,11 @@ final class AppSettings: ObservableObject {
             }
         }
     }
+    /// Show new episodes are sent to unless changed per episode. Stored as the
+    /// Transistor show id; empty means "not chosen yet".
+    @Published var defaultShowId: String {
+        didSet { kv.set(defaultShowId, forKey: "defaultShowId") }
+    }
     @Published var autoDeleteAfterUpload: Bool {
         didSet { kv.set(autoDeleteAfterUpload, forKey: "autoDeleteAfterUpload") }
     }
@@ -78,6 +83,7 @@ final class AppSettings: ObservableObject {
         baserowTableId = kv.string(forKey: "baserowTableId") ?? ""
         autoSyncBaserow = kv.object(forKey: "autoSyncBaserow") != nil ? kv.bool(forKey: "autoSyncBaserow") : true
         autoSendToCraft = kv.bool(forKey: "autoSendToCraft")
+        defaultShowId = kv.string(forKey: "defaultShowId") ?? ""
         autoDeleteAfterUpload = kv.bool(forKey: "autoDeleteAfterUpload")
         iCloudBackupEnabled = kv.bool(forKey: "iCloudBackupEnabled")
         craftAPIURL = kv.string(forKey: "craftAPIURL") ?? ""
@@ -123,6 +129,7 @@ final class AppSettings: ObservableObject {
         baserowTableId = kv.string(forKey: "baserowTableId") ?? baserowTableId
         autoSyncBaserow = kv.object(forKey: "autoSyncBaserow") != nil ? kv.bool(forKey: "autoSyncBaserow") : autoSyncBaserow
         autoSendToCraft = kv.bool(forKey: "autoSendToCraft")
+        defaultShowId = kv.string(forKey: "defaultShowId") ?? defaultShowId
         autoDeleteAfterUpload = kv.bool(forKey: "autoDeleteAfterUpload")
         iCloudBackupEnabled = kv.bool(forKey: "iCloudBackupEnabled")
         craftAPIURL = kv.string(forKey: "craftAPIURL") ?? craftAPIURL
@@ -139,6 +146,13 @@ final class AppSettings: ObservableObject {
            let folders = try? JSONDecoder().decode([CraftFolder].self, from: data) {
             cachedCraftFolders = folders
         }
+    }
+
+    /// The show new episodes should go to: the chosen default, or the only
+    /// show when there is just one. Never guesses between several.
+    var defaultShow: TransistorShow? {
+        if let match = cachedShows.first(where: { $0.id == defaultShowId }) { return match }
+        return cachedShows.count == 1 ? cachedShows.first : nil
     }
 
     var hasTransistorKey: Bool { !transistorAPIKey.isEmpty }

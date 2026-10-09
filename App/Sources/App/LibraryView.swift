@@ -2,9 +2,11 @@ import SwiftUI
 
 struct LibraryView: View {
     @EnvironmentObject var store: RecordingStore
+    @EnvironmentObject var router: AppRouter
+    @State private var path: [Recording] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 Theme.bg.ignoresSafeArea()
                 if store.recordings.isEmpty {
@@ -12,9 +14,22 @@ struct LibraryView: View {
                 } else {
                     List {
                         ForEach(store.recordings) { recording in
-                            NavigationLink(value: recording) {
-                                RecordingRow(recording: recording)
+                            // A Button pushing onto `path`, not a value-based
+                            // NavigationLink: after the Library tab pops the
+                            // stack, macOS left the links dead (taps did
+                            // nothing).
+                            Button {
+                                path.append(recording)
+                            } label: {
+                                HStack {
+                                    RecordingRow(recording: recording)
+                                    Image(systemName: "chevron.right")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(Theme.muted.opacity(0.6))
+                                }
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                             .listRowBackground(Theme.bg)
                         }
                         .onDelete { indexSet in
@@ -29,6 +44,7 @@ struct LibraryView: View {
             .navigationDestination(for: Recording.self) { recording in
                 EditRecordingView(recording: recording)
             }
+            .onChange(of: router.libraryReselectCount) { _, _ in path.removeAll() }
         }
     }
 

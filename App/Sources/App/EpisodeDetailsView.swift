@@ -28,6 +28,7 @@ struct EpisodeDetailsView: View {
         .onChange(of: recording) { _, newValue in store.update(newValue) }
         .task {
             if settings.cachedShows.isEmpty { await loadShows() }
+            applyDefaultShowIfNeeded()
         }
     }
 
@@ -43,14 +44,17 @@ struct EpisodeDetailsView: View {
                     }
                 } else {
                     Picker("Podcast", selection: Binding(
-                        get: { recording.episode.showId ?? settings.cachedShows.first?.id },
+                        get: { recording.episode.showId ?? "" },
                         set: { newId in
-                            recording.episode.showId = newId
+                            recording.episode.showId = newId.isEmpty ? nil : newId
                             recording.episode.showTitle = settings.cachedShows.first { $0.id == newId }?.title
                         }
                     )) {
+                        if recording.episode.showId == nil {
+                            Text("Select a show").tag("")
+                        }
                         ForEach(settings.cachedShows) { show in
-                            Text(show.title).tag(Optional(show.id))
+                            Text(show.title).tag(show.id)
                         }
                     }
                 }
@@ -105,6 +109,15 @@ struct EpisodeDetailsView: View {
                 Button("Done") { isFieldFocused = false }
             }
         }
+    }
+
+    /// A new episode starts with the Settings default (or the only show) so
+    /// the picker's selection is what actually gets uploaded; previously the
+    /// picker displayed the first show without ever storing it on the episode.
+    private func applyDefaultShowIfNeeded() {
+        guard recording.episode.showId == nil, let show = settings.defaultShow else { return }
+        recording.episode.showId = show.id
+        recording.episode.showTitle = show.title
     }
 
     private func loadShows() async {

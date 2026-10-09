@@ -28,6 +28,20 @@ struct PrimaryActionButtonStyle: ButtonStyle {
     }
 }
 
+/// Green "finished" button. Same metrics as PrimaryActionButtonStyle so the
+/// two can sit side by side at equal size.
+struct SuccessActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, actionVerticalPadding)
+            .background(RoundedRectangle(cornerRadius: actionCornerRadius).fill(Theme.success))
+            .foregroundStyle(.white)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+    }
+}
+
 struct TintedActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -70,6 +84,10 @@ struct QuickActionButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == PrimaryActionButtonStyle {
     static var primaryAction: PrimaryActionButtonStyle { PrimaryActionButtonStyle() }
+}
+
+extension ButtonStyle where Self == SuccessActionButtonStyle {
+    static var successAction: SuccessActionButtonStyle { SuccessActionButtonStyle() }
 }
 
 extension ButtonStyle where Self == TintedActionButtonStyle {

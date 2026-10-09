@@ -1,25 +1,26 @@
 import SwiftUI
 
 struct RootTabView: View {
-    enum Tab { case record, library, settings }
+    @StateObject private var router = AppRouter()
 
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
-            TabView {
+            TabView(selection: Binding(get: { router.selectedTab }, set: { router.select($0) })) {
                 RecordView()
                     .tabItem { Label("Record", systemImage: "mic.fill") }
-                    .tag(Tab.record)
+                    .tag(AppTab.record)
 
                 LibraryView()
                     .tabItem { Label("Library", systemImage: "waveform") }
-                    .tag(Tab.library)
+                    .tag(AppTab.library)
 
                 SettingsView()
                     .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-                    .tag(Tab.settings)
+                    .tag(AppTab.settings)
             }
             .tint(Theme.accent)
         }
+        .environmentObject(router)
     }
 }

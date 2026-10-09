@@ -34,6 +34,13 @@ final class AudioPlayer: NSObject, ObservableObject {
         }
     }
 
+    /// Stops playback without losing the file; used when leaving the screen.
+    func stop() {
+        player?.pause()
+        isPlaying = false
+        stopTimer()
+    }
+
     func seek(to time: TimeInterval) {
         player?.currentTime = time
         currentTime = time

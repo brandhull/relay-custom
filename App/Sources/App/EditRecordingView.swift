@@ -7,6 +7,7 @@ struct EditRecordingView: View {
     @EnvironmentObject var store: RecordingStore
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var backupManager: BackupManager
+    @EnvironmentObject var router: AppRouter
     @Environment(\.dismiss) private var dismiss
     @StateObject private var player = AudioPlayer()
     @State var recording: Recording
@@ -103,8 +104,12 @@ struct EditRecordingView: View {
                         progress: player.duration > 0 ? player.currentTime / player.duration : 0
                     )
                     .padding(.horizontal, 16)
-                    TrimSelectorOverlay(trimStart: $trimStart, trimEnd: $trimEnd)
-                        .padding(.horizontal, 16)
+                    TrimSelectorOverlay(trimStart: $trimStart, trimEnd: $trimEnd) { fraction in
+                        // Tap-to-seek: playback (running or paused) continues
+                        // from the tapped spot.
+                        player.seek(to: Double(fraction) * player.duration)
+                    }
+                    .padding(.horizontal, 16)
                     if recording.duration > 0 {
                         FlagTicksOverlay(flags: recording.flags, duration: recording.duration)
                             .padding(.horizontal, 16)
@@ -240,12 +245,29 @@ struct EditRecordingView: View {
                 .buttonStyle(.tintedAction)
             }
 
-            NavigationLink {
-                EpisodeDetailsView(recording: $recording)
-            } label: {
-                Text("Continue to Episode Details")
+            // Both buttons stretch to the taller label's height so they stay
+            // the same size if either label wraps.
+            HStack(spacing: 12) {
+                NavigationLink {
+                    EpisodeDetailsView(recording: $recording)
+                } label: {
+                    Text("Episode Details")
+                        .multilineTextAlignment(.center)
+                        .frame(maxHeight: .infinity)
+                }
+                .buttonStyle(.primaryAction)
+
+                Button {
+                    player.stop()
+                    router.selectedTab = .record
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .frame(maxHeight: .infinity)
+                }
+                .buttonStyle(.successAction)
             }
-            .buttonStyle(.primaryAction)
+            .fixedSize(horizontal: false, vertical: true)
 
             Button(role: .destructive) {
                 showDeleteConfirm = true
@@ -441,6 +463,7 @@ struct EditRecordingView: View {
 private struct TrimSelectorOverlay: View {
     @Binding var trimStart: CGFloat
     @Binding var trimEnd: CGFloat
+    var onTap: (CGFloat) -> Void
 
     // Fraction value at the moment each drag began, so mid-drag re-renders
     // (which move the handle under the finger) don't compound with the
@@ -493,6 +516,13 @@ private struct TrimSelectorOverlay: View {
                             .onEnded { _ in endAtDragBegin = nil }
                     )
             }
+            .frame(width: width, height: geo.size.height, alignment: .leading)
+            .contentShape(Rectangle())
+            .gesture(
+                SpatialTapGesture().onEnded { value in
+                    onTap(min(max(0, value.location.x / max(width, 1)), 1))
+                }
+            )
         }
     }
 

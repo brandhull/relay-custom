@@ -61,6 +61,7 @@ targets:
     # porting everything at once.
     sources:
       - path: App/Sources/App/RelayApp.swift
+      - path: App/Sources/App/AppRouter.swift
       - path: App/Sources/App/AppearanceSwitcher.swift
       - path: App/Sources/App/PinOnTop.swift
       - path: App/Sources/App/RecordView.swift

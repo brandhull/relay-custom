@@ -18,7 +18,7 @@ struct RelayApp: App {
     #if os(macOS)
     @AppStorage("macAppearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("macPinOnTop") private var pinOnTop: Bool = false
-    @State private var macTab: MacTab = .record
+    @StateObject private var router = AppRouter()
     // 620 gave the top bar breathing room, but EditRecordingView's content
     // (waveform, quick actions, footer, plus a status/error line once one
     // of the quick actions runs) measured at ~672pt of real content —
@@ -67,7 +67,7 @@ struct RelayApp: App {
                 // this window width), and left-aligned never competes with
                 // them regardless of pill width.
                 HStack(spacing: 2) {
-                    MacTabPill(selection: $macTab)
+                    MacTabPill(selection: router.selectedTab) { router.select($0) }
                     Spacer()
                     Button {
                         pinOnTop.toggle()
@@ -99,7 +99,7 @@ struct RelayApp: App {
                 .frame(height: Self.topBarHeight)
 
                 Group {
-                    switch macTab {
+                    switch router.selectedTab {
                     case .record: RecordView()
                     case .library: LibraryView()
                     case .settings: SettingsView()
@@ -113,6 +113,7 @@ struct RelayApp: App {
             .environmentObject(settings)
             .environmentObject(backupManager)
             .environmentObject(recorder)
+            .environmentObject(router)
             .preferredColorScheme(appearanceMode.colorScheme)
             .tint(Theme.accent)
             .frame(width: 430, height: Self.windowHeight)
@@ -126,16 +127,13 @@ struct RelayApp: App {
 }
 
 #if os(macOS)
-private enum MacTab {
-    case record, library, settings
-}
-
 /// Hand-built replacement for SwiftUI's native macOS TabView pill — see the
 /// comment above its call site in RelayApp.body for why. Styled to match
 /// the native pill it replaces: a capsule track with a lighter capsule
 /// riding on top of whichever segment is selected.
 private struct MacTabPill: View {
-    @Binding var selection: MacTab
+    let selection: AppTab
+    let onSelect: (AppTab) -> Void
 
     var body: some View {
         HStack(spacing: 2) {
@@ -147,10 +145,10 @@ private struct MacTabPill: View {
         .background(Capsule().fill(Color.white.opacity(0.08)))
     }
 
-    private func segment(_ title: String, tab: MacTab) -> some View {
+    private func segment(_ title: String, tab: AppTab) -> some View {
         let isActive = selection == tab
         return Button {
-            selection = tab
+            onSelect(tab)
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: isActive ? .semibold : .regular))

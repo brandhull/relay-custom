@@ -92,6 +92,19 @@ struct SettingsView: View {
                                 .truncationMode(.tail)
                         }
                     }
+                    if !settings.cachedShows.isEmpty {
+                        Picker("Default Show", selection: Binding(
+                            get: { settings.defaultShow?.id ?? "" },
+                            set: { settings.defaultShowId = $0 }
+                        )) {
+                            if settings.defaultShow == nil {
+                                Text("Select a show").tag("")
+                            }
+                            ForEach(settings.cachedShows) { show in
+                                Text(show.title).tag(show.id)
+                            }
+                        }
+                    }
                     if let showsError {
                         Text(showsError).font(.caption).foregroundStyle(Theme.danger)
                     }
