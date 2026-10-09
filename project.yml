@@ -1,4 +1,13 @@
 name: Relay
+# Single source of truth for versioning (MAJOR.MINOR.PATCH, see CHANGELOG.md).
+# MARKETING_VERSION is the human-readable version shared by iOS and Mac;
+# CURRENT_PROJECT_VERSION is the build number, bumped on every build shipped
+# to a device and never reset. Both plists read these via $(...) below.
+settings:
+  base:
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
+
 options:
   bundleIdPrefix: com.brandonhull
   deploymentTarget:
@@ -16,6 +25,8 @@ targets:
     info:
       path: App/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -95,6 +106,8 @@ targets:
     info:
       path: App/Info-Mac.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSMinimumSystemVersion: "14.0"
         NSMicrophoneUsageDescription: "Relay needs microphone access to record podcast episodes."
         NSSpeechRecognitionUsageDescription: "Relay uses on-device speech recognition to transcribe your recordings before sending them to Craft."

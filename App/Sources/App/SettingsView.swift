@@ -61,6 +61,14 @@ struct SettingsView: View {
         #endif
     }
 
+    /// "1.1.0 (2)": marketing version plus build number, both from project.yml.
+    private static var versionString: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
+    }
+
     private var settingsForm: some View {
         Form {
                 Section {
@@ -285,7 +293,7 @@ struct SettingsView: View {
                 }
 
                 Section("About") {
-                    LabeledContent("Version", value: "1.0")
+                    LabeledContent("Version", value: Self.versionString)
                 }
             }
         #if os(macOS)
