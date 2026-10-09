@@ -115,7 +115,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    TextField("Baserow Token", text: $settings.baserowToken)
+                    SecureField("Baserow Token", text: $settings.baserowToken)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
@@ -187,7 +187,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    TextField("Craft API URL", text: $settings.craftAPIURL)
+                    SecureField("Craft API URL", text: $settings.craftAPIURL)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
