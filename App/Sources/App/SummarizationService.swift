@@ -25,6 +25,25 @@ enum SummarizationService {
         return response.content
     }
 
+    /// A short episode title from the start of a transcript. Only the first
+    /// few thousand characters are sent — plenty to name a recording, and it
+    /// keeps the prompt inside the on-device model's context window.
+    static func suggestTitle(_ transcript: String) async throws -> String {
+        let session = LanguageModelSession(
+            instructions: "You write titles for podcast recordings. Reply with one title only: at most 8 words, in sentence case (capitalize only the first word and proper nouns, never all caps), no quotation marks, no trailing punctuation, no preamble."
+        )
+        let response = try await session.respond(to: "Title this recording based on its transcript:\n\n\(String(transcript.prefix(3000)))")
+        let title = response.content
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’"))
+        // The model sometimes ignores the casing instruction and shouts; fall
+        // back to plain sentence case rather than ever showing all caps.
+        if title.count > 3, title == title.uppercased() {
+            return title.prefix(1).uppercased() + title.dropFirst().lowercased()
+        }
+        return title
+    }
+
     /// Fixes sentence breaks and punctuation on a full transcript without
     /// altering wording — automatic pause-based punctuation (see
     /// `AppleSpeechAnalyzerService`) occasionally reads a mid-thought pause

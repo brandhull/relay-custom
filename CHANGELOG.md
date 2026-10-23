@@ -10,6 +10,14 @@ The version lives in `project.yml` (`MARKETING_VERSION`), along with the build
 number (`CURRENT_PROJECT_VERSION`), which goes up on every build shipped to a
 device and never resets. Each release is tagged `vMAJOR.MINOR.PATCH`.
 
+## 1.2.0 (build 3) — 2026-10-23
+
+### Added
+- "Suggest title" button (sparkles) next to the title on the Edit screen. It
+  transcribes the recording on-device and writes a short sentence-case title
+  with Apple Intelligence. Only appears where Apple Intelligence is available;
+  never runs automatically.
+
 ## 1.1.0 (build 2) — 2026-10-08
 
 ### Added

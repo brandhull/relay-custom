@@ -23,6 +23,7 @@ struct EditRecordingView: View {
     @State private var statusMessage: String?
     @State private var isTranscribing = false
     @State private var transcribeStatus: String?
+    @State private var isSuggestingTitle = false
     @FocusState private var titleFocused: Bool
 
     private var samples: [CGFloat] {
@@ -83,11 +84,28 @@ struct EditRecordingView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                TextField("Title", text: $recording.episode.title)
-                    .font(.headline)
-                    .foregroundStyle(Theme.fg)
-                    .focused($titleFocused)
-                    .onChange(of: recording.episode.title) { _, _ in store.update(recording) }
+                HStack(spacing: 8) {
+                    TextField("Title", text: $recording.episode.title)
+                        .font(.headline)
+                        .foregroundStyle(Theme.fg)
+                        .focused($titleFocused)
+                        .onChange(of: recording.episode.title) { _, _ in store.update(recording) }
+                    if canSuggestTitle {
+                        Button {
+                            Task { await suggestTitle() }
+                        } label: {
+                            if isSuggestingTitle {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(Theme.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSuggestingTitle || isSaving || isTranscribing)
+                        .help("Suggest a title from the transcript")
+                    }
+                }
                 Text("\(recording.createdAt.formatted(date: .numeric, time: .shortened)) · \(timeString(recording.duration)) · Recorded")
                     .font(.caption)
                     .foregroundStyle(Theme.muted)
@@ -419,6 +437,40 @@ struct EditRecordingView: View {
             recording.sentToCraft = true
             store.update(recording)
             statusMessage = "\(label) added to \(settings.craftFolderTitle.isEmpty ? "Craft" : settings.craftFolderTitle)."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// The sparkles button only shows when on-device Apple Intelligence can
+    /// actually write a title, and there's audio to transcribe.
+    private var canSuggestTitle: Bool {
+        guard !recording.audioRemovedLocally else { return false }
+        if #available(iOS 26.0, macOS 26.0, *) { return SummarizationService.isAvailable() }
+        return false
+    }
+
+    /// Transcribes the recording on-device, then asks the on-device model for
+    /// a short title and drops it in the title field (overwriting what's
+    /// there — it's a button you tap, never automatic).
+    private func suggestTitle() async {
+        guard #available(iOS 26.0, macOS 26.0, *) else { return }
+        errorMessage = nil
+        statusMessage = nil
+        isSuggestingTitle = true
+        defer { isSuggestingTitle = false }
+        do {
+            guard await TranscriptionService.requestAuthorization() else {
+                throw TranscriptionError.permissionDenied
+            }
+            let transcript = try await TranscriptionService.transcribe(fileURL: recording.fileURL)
+            let title = try await SummarizationService.suggestTitle(transcript)
+            guard !title.isEmpty else {
+                errorMessage = "Couldn't come up with a title for this recording."
+                return
+            }
+            recording.episode.title = title
+            store.update(recording)
         } catch {
             errorMessage = error.localizedDescription
         }
